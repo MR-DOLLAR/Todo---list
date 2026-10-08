@@ -1,24 +1,26 @@
+# One-command start: docker compose up --build   → http://localhost:4000
 services:
   ml-service:
     build: ./ml-service
-    volumes:
-      - ./ml-service/models:/app/models   # drop leaf_model.onnx + labels.json here
-    expose:
-      - "5000"
+    restart: unless-stopped
+    # The trained model is baked into the image. To use your own, uncomment:
+    # volumes:
+    #   - ./ml-service/models:/app/models:ro
 
   server:
-    build: ./server
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
     environment:
-      ML_SERVICE_URL: http://ml-service:5000
-      DATA_DIR: /data
-      CLIENT_DIST: /client
+      ML_SERVICE_URL: http://ml-service:5001
     volumes:
-      - server-data:/data
-      - ./client/dist:/client:ro
+      - server-data:/data   # diagnosis history + uploaded images
     ports:
       - "4000:4000"
     depends_on:
-      - ml-service
+      ml-service:
+        condition: service_healthy
 
 volumes:
   server-data:

@@ -24,7 +24,12 @@ def create_app(predictor=None, kb=None):
 
     @app.get("/health")
     def health():
-        return jsonify(status="ok", mode=app.predictor.mode, classes=len(app.predictor.labels))
+        return jsonify(
+            status="ok",
+            mode=app.predictor.mode,
+            classes=len(app.predictor.labels),
+            fallback_reason=getattr(app.predictor, "fallback_reason", None),
+        )
 
     @app.post("/predict")
     def predict():
@@ -98,5 +103,10 @@ def create_app(predictor=None, kb=None):
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    create_app().run(host="0.0.0.0", port=port, debug=os.environ.get("FLASK_DEBUG") == "1")
+    # 5001 rather than Flask's usual 5000, which macOS AirPlay Receiver occupies.
+    # Only the Node API talks to this service, so listen on localhost by default.
+    port = int(os.environ.get("PORT", 5001))
+    host = os.environ.get("HOST", "127.0.0.1")
+    app = create_app()
+    print(f"LeafCare ML service on http://{host}:{port} (mode: {app.predictor.mode})", flush=True)
+    app.run(host=host, port=port, debug=os.environ.get("FLASK_DEBUG") == "1")

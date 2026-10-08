@@ -79,3 +79,33 @@ test('rejects non-image uploads and missing files', async () => {
 test('proxies disease library', async () => {
   assert.deepEqual(await (await fetch(`${base}/diseases?crop=Tomato`)).json(), [{ id: 'x' }]);
 });
+
+test('unknown API routes return JSON 404', async () => {
+  const res = await fetch(`${base}/nope`);
+  assert.equal(res.status, 404);
+  assert.deepEqual(await res.json(), { error: 'Not found' });
+});
+
+test('explains an unbuilt client, then serves the build without a restart', async () => {
+  const dist = fs.mkdtempSync(path.join(os.tmpdir(), 'leafcare-dist-'));
+  const server = createApp({ mlUrl: 'http://127.0.0.1:9', dataDir, clientDist: dist, logger: false }).listen(0);
+  await new Promise((r) => server.on('listening', r));
+  const url = `http://localhost:${server.address().port}`;
+  try {
+    const before = await fetch(`${url}/history`);
+    assert.equal(before.status, 404);
+    assert.match(await before.text(), /web interface has not been built/);
+
+    fs.writeFileSync(path.join(dist, 'index.html'), '<div id="root"></div>');
+    const after = await fetch(`${url}/history`);
+    assert.equal(after.status, 200);
+    assert.match(await after.text(), /id="root"/);
+
+    const down = await fetch(`${url}/api/crops`);
+    assert.equal(down.status, 503);
+    assert.match((await down.json()).error, /python app\.py/);
+  } finally {
+    server.close();
+    fs.rmSync(dist, { recursive: true, force: true });
+  }
+});

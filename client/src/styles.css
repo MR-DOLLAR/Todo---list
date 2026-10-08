@@ -49,6 +49,8 @@ footer { padding: 24px 0; font-size: 0.85rem; text-align: center; }
 
 .banner { margin-top: 16px; padding: 10px 14px; border-radius: var(--radius); background: color-mix(in srgb, var(--warn) 15%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); font-size: 0.9rem; }
 
+.banner-bad { background: color-mix(in srgb, var(--bad) 12%, transparent); border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
+.banner code { font-size: 0.85em; padding: 1px 5px; border-radius: 4px; background: color-mix(in srgb, var(--text) 8%, transparent); }
 .pill { font-size: 0.8rem; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
 .pill-good { color: var(--good); border-color: var(--good); }
 .pill-warn { color: var(--warn); border-color: var(--warn); }

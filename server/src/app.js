@@ -9,6 +9,15 @@ import multer from 'multer';
 import { HistoryStore } from './store.js';
 
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/bmp']);
+const NOT_BUILT_PAGE = `<!doctype html><meta charset="utf-8"><title>LeafCare API</title>
+<body style="font-family:system-ui,sans-serif;max-width:640px;margin:48px auto;padding:0 16px;line-height:1.5">
+<h1>LeafCare API is running</h1>
+<p>The web interface has not been built, so there is nothing to show on this port yet. Either:</p>
+<ul>
+<li><b>Development:</b> open <a href="http://localhost:5173">http://localhost:5173</a> (started by <code>npm run dev</code> in <code>client/</code>, or <code>npm run dev</code> from the repo root), or</li>
+<li><b>Single server:</b> run <code>npm run build</code> in <code>client/</code>, then reload this page.</li>
+</ul>
+<p>API health: <a href="/api/health">/api/health</a></p></body>`;
 const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/bmp': '.bmp' };
 
 export function createApp({ mlUrl, dataDir, clientDist, logger = true }) {
@@ -30,7 +39,10 @@ export function createApp({ mlUrl, dataDir, clientDist, logger = true }) {
     try {
       res = await fetch(`${mlUrl}${pathname}`, init);
     } catch {
-      throw Object.assign(new Error('ML service is unavailable'), { status: 503 });
+      throw Object.assign(
+        new Error(`ML service is unavailable at ${mlUrl}. Start it with "python app.py" in ml-service/.`),
+        { status: 503 },
+      );
     }
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw Object.assign(new Error(body.error || 'ML service error'), { status: res.status });
@@ -155,11 +167,17 @@ export function createApp({ mlUrl, dataDir, clientDist, logger = true }) {
   });
 
   app.use('/api', api);
+  app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
-  // Serve the built React app in production.
-  if (clientDist && fs.existsSync(clientDist)) {
+  // Serve the built React app. Checked per request so a build made after the
+  // server started is picked up without a restart.
+  if (clientDist) {
     app.use(express.static(clientDist));
-    app.get(/^(?!\/api|\/uploads).*/, (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+    app.get(/^(?!\/api|\/uploads).*/, (_req, res) => {
+      const index = path.join(clientDist, 'index.html');
+      if (fs.existsSync(index)) return res.sendFile(index);
+      res.status(404).type('html').send(NOT_BUILT_PAGE);
+    });
   }
 
   app.use((err, _req, res, _next) => {

@@ -5,7 +5,9 @@
 before a model has been trained; it only distinguishes generic symptom groups.
 """
 import json
+import logging
 import os
+import sys
 
 import numpy as np
 from PIL import Image
@@ -59,6 +61,7 @@ class OnnxPredictor:
 
 class HeuristicPredictor:
     mode = "heuristic"
+    fallback_reason = None
     labels = [
         "Generic___healthy",
         "Generic___Leaf_spot_or_blight",
@@ -90,6 +93,22 @@ def _crop_key(label):
 def load_predictor():
     model_path = os.path.join(MODEL_DIR, "leaf_model.onnx")
     labels_path = os.path.join(MODEL_DIR, "labels.json")
-    if os.path.exists(model_path) and os.path.exists(labels_path):
+    if not (os.path.exists(model_path) and os.path.exists(labels_path)):
+        return _fallback(f"No trained model found in {MODEL_DIR}.")
+    try:
         return OnnxPredictor(model_path, labels_path)
-    return HeuristicPredictor()
+    except (ImportError, OSError) as exc:
+        # Typically a missing native runtime, e.g. the Microsoft Visual C++
+        # Redistributable on Windows. Keep the service usable instead of crashing.
+        hint = ""
+        if sys.platform == "win32":
+            hint = (" On Windows, install the Microsoft Visual C++ Redistributable "
+                    "(https://aka.ms/vs/17/release/vc_redist.x64.exe) and restart the ML service.")
+        return _fallback(f"Could not load onnxruntime ({exc}).{hint}")
+
+
+def _fallback(reason):
+    logging.getLogger(__name__).warning("Using heuristic fallback: %s", reason)
+    predictor = HeuristicPredictor()
+    predictor.fallback_reason = reason
+    return predictor

@@ -115,3 +115,20 @@ def test_bundled_model_loads_and_predicts_known_labels():
     assert top[0]["label"].startswith("Tomato___")
     assert 0 < top[0]["confidence"] <= 1
     assert top[0]["confidence"] >= top[-1]["confidence"]
+
+
+def test_falls_back_to_heuristic_when_onnxruntime_cannot_load(monkeypatch):
+    import predictor
+
+    def broken(*_args, **_kwargs):
+        raise ImportError("DLL load failed while importing onnxruntime_pybind11_state")
+
+    monkeypatch.setattr(predictor, "OnnxPredictor", broken)
+    monkeypatch.setattr(predictor.os.path, "exists", lambda _p: True)
+    fallback = predictor.load_predictor()
+    assert fallback.mode == "heuristic"
+    assert "DLL load failed" in fallback.fallback_reason
+
+    health = create_app(predictor=fallback).test_client().get("/health").get_json()
+    assert health["mode"] == "heuristic"
+    assert "DLL load failed" in health["fallback_reason"]

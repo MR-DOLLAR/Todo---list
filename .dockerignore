@@ -1,0 +1,8 @@
+# Used by the server image (built with the repository root as context).
+**/node_modules
+**/.venv
+.git
+ml-service
+server/data
+server/test
+client/dist

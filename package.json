@@ -1,0 +1,15 @@
+{
+  "name": "leafcare",
+  "private": true,
+  "description": "Leaf disease detection and treatment prediction (React + Node.js + Python/Flask)",
+  "type": "module",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "node scripts/dev.mjs",
+    "start": "node scripts/dev.mjs --prod",
+    "test": "node scripts/test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

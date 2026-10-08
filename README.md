@@ -31,40 +31,124 @@ and predicts a treatment plan with a recovery prognosis.
   that recognises generic symptom groups (leaf spot/blight, powdery mildew, rust, chlorosis, healthy) and the UI
   shows a "demo mode" banner.
 
-## Quick start (local)
+## How to run
 
-Requirements: Python 3.10+, Node.js 20+.
+Pick **one** of the options below. Option 1 needs only Docker; option 2 needs Node.js and Python.
+
+| Port | Service |
+| --- | --- |
+| 5173 | Web app in development mode (option 2 `npm run dev`) |
+| 4000 | API server; also serves the web app in options 1 and `npm start` |
+| 5001 | Python ML service (internal; only the API server talks to it) |
+
+### Get the code
 
 ```bash
-# 1. ML service (port 5000)
-cd ml-service
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python app.py
+git clone https://github.com/MR-DOLLAR/Todo---list.git
+cd Todo---list
+```
 
-# 2. API server (port 4000)
+No git? On GitHub click **Code → Download ZIP**, unzip it and open a terminal in the unzipped folder.
+All commands below run from this folder (the one containing `docker-compose.yml`).
+
+### Option 1 — Docker (simplest: nothing else to install)
+
+Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/macOS) or Docker Engine with Compose v2 (Linux).
+
+```bash
+docker compose up --build
+```
+
+Wait for the build (a few minutes the first time), then open **http://localhost:4000**.
+Stop with `Ctrl+C`; start again later with `docker compose up`. Diagnosis history is kept in a Docker volume
+(`docker compose down -v` deletes it).
+
+### Option 2 — Node.js + Python, one command
+
+Requirements:
+
+| | Version | Install |
+| --- | --- | --- |
+| Node.js | 22 LTS recommended (20+) | [nodejs.org](https://nodejs.org) · Windows `winget install OpenJS.NodeJS.LTS` · macOS `brew install node@22` · Ubuntu: use nodejs.org/nvm (apt's version is too old) |
+| Python | 3.12 or 3.13 recommended (3.10–3.14) | [python.org](https://www.python.org/downloads/) · Windows `winget install Python.Python.3.13` · macOS `brew install python@3.13` · Ubuntu `sudo apt install python3 python3-venv` |
+
+Python 3.15 is not supported yet (no onnxruntime build); on Intel Macs use 3.10–3.13.
+
+```bash
+npm run setup    # once: creates ml-service/.venv and installs all Python + npm packages (~1-3 min)
+npm run dev      # starts the ML service, API server and web app together
+```
+
+Open **http://localhost:5173**. Press `Ctrl+C` to stop everything. Next time, just run `npm run dev`.
+
+| Command | What it does |
+| --- | --- |
+| `npm run setup` | One-time install (safe to re-run) |
+| `npm run dev` | Development mode → http://localhost:5173 |
+| `npm start` | Builds the web app and serves everything from one server → http://localhost:4000 |
+| `npm test` | Runs the Python and Node test suites |
+
+**Windows PowerShell:** if you see *"running scripts is disabled on this system"*, use **Command Prompt** instead,
+type `npm.cmd` instead of `npm` (e.g. `npm.cmd run dev`), or allow scripts once with
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
+### Option 3 — start each service by hand (three terminals)
+
+Useful when you want to see or restart one service at a time. Open three terminals, each in the project folder.
+
+**Terminal 1 — ML service** (port 5001)
+
+macOS / Linux:
+
+```bash
+cd ml-service
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python app.py
+```
+
+Windows (Command Prompt or PowerShell):
+
+```bat
+cd ml-service
+py -3.13 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe app.py
+```
+
+(Use whichever supported version you have, e.g. `py -3.12`. Next time only the last line is needed.)
+
+**Terminal 2 — API server** (port 4000)
+
+```bash
 cd server
 npm install
 npm run dev
+```
 
-# 3. React client (port 5173, proxies /api to :4000)
+**Terminal 3 — web app** (port 5173)
+
+```bash
 cd client
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173.
+Open **http://localhost:5173**. Keep all three terminals running.
 
-For a production-style run, run `npm run build` in `client/`; the Node server then serves `client/dist` on port 4000.
+### Troubleshooting
 
-### Docker
-
-```bash
-cd client && npm install && npm run build && cd ..
-docker compose up --build
-```
-
-Open http://localhost:4000.
+| Symptom | Fix |
+| --- | --- |
+| Red **“API offline”** banner | The API server (port 4000) isn't running — start it (option 3, terminal 2) or use `npm run dev`. |
+| Red **“ML offline”** banner / *“ML service is unavailable”* | The ML service (port 5001) isn't running — start it (option 3, terminal 1). |
+| Yellow **demo mode** banner on Windows mentioning onnxruntime | Install the [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (`winget install Microsoft.VCRedist.2015+.x64`) and restart. |
+| `python: command not found` (macOS/Linux) | Use `python3`. |
+| *“ensurepip is not available”* (Ubuntu/Debian) | `sudo apt install python3-venv`, delete `ml-service/.venv`, run setup again. |
+| *“Port … is already in use”* | LeafCare (or another program) is already running on that port — stop it first. |
+| http://localhost:4000 says *“web interface has not been built”* | Expected in development mode: use http://localhost:5173, or run `npm start` / `npm run build` in `client/`. |
+| `npm install` prints audit warnings | Don't run `npm audit fix --force` (it makes breaking upgrades). |
+| Red *“This is a development server”* line from Flask | Expected for local use; Docker runs the ML service under gunicorn. |
 
 ## Model
 
@@ -88,24 +172,28 @@ in the wild and consider fine-tuning on your own photos.
 
 ```bash
 cd ml-service
-pip install -r train/requirements.txt
-python train/train.py --data-dir /path/to/plantvillage/color --epochs 5 --arch mobilenet_v3
+.venv/bin/python -m pip install -r train/requirements.txt      # Windows: .venv\Scripts\python.exe -m pip ...
+.venv/bin/python train/train.py --data-dir /path/to/plantvillage/color --epochs 5 --arch mobilenet_v3
 ```
+
+PyTorch wheels exist for Python 3.10–3.14 (Intel Macs: up to 3.12). Training on a CPU works but is slow on the
+full dataset; a GPU is recommended.
 
 Behind a firewall that blocks `download.pytorch.org` / Hugging Face, pass local pretrained weights instead, e.g.
 the timm MobileNetV3 weights from GitHub releases:
 
 ```bash
 curl -LO https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_large_100_ra-f55367f5.pth
-python train/train.py --data-dir /path/to/train --arch timm:mobilenetv3_large_100 \
-    --weights mobilenetv3_large_100_ra-f55367f5.pth --epochs 4
+.venv/bin/python train/train.py --data-dir /path/to/train --arch timm:mobilenetv3_large_100 --weights mobilenetv3_large_100_ra-f55367f5.pth --epochs 4
 ```
+
+(Windows PowerShell: use `curl.exe` instead of `curl`.)
 
 This writes `models/leaf_model.onnx` and `models/labels.json`; restart the ML service to pick them up
 (`GET /health` reports `"mode": "model"`). Evaluate on a held-out folder with the same inference code the service uses:
 
 ```bash
-python train/evaluate.py --data-dir /path/to/test
+.venv/bin/python train/evaluate.py --data-dir /path/to/test
 ```
 
 Inference needs only `onnxruntime`, `numpy` and `Pillow`; PyTorch is only required for training.
@@ -125,7 +213,7 @@ Inference needs only `onnxruntime`, `numpy` and `Pillow`; PyTorch is only requir
 | GET | `/diseases/:id` | One disease |
 | GET | `/crops` | Supported crops |
 
-### Flask ML service (`:5000`)
+### Flask ML service (`:5001`)
 
 `GET /health`, `POST /predict` (same form fields), `GET /diseases`, `GET /diseases/<id>`, `GET /crops`.
 
@@ -152,17 +240,29 @@ Example `/predict` response (abridged):
 
 | Variable | Service | Default |
 | --- | --- | --- |
-| `PORT` | ml-service / server | `5000` / `4000` |
+| `PORT` | ml-service / server | `5001` / `4000` |
+| `HOST` | ml-service (`python app.py`) | `127.0.0.1` |
 | `MODEL_DIR` | ml-service | `ml-service/models` |
-| `ML_SERVICE_URL` | server | `http://localhost:5000` |
+| `ML_SERVICE_URL` | server | `http://127.0.0.1:5001` |
 | `DATA_DIR` | server | `server/data` (history JSON + uploaded images) |
 | `CLIENT_DIST` | server | `client/dist` |
+
+When using `npm run dev` / `npm start`, set `ML_PORT` and `PORT` to change the ML and API ports.
 
 ## Tests
 
 ```bash
-cd ml-service && pytest -q     # Flask API, classifier, severity, treatment planner
-cd server && npm test          # Express API against a mock ML service
+npm test     # after npm run setup: runs both suites below
+```
+
+Or individually, from the project folder:
+
+```bash
+cd ml-service
+.venv/bin/python -m pip install -r requirements-dev.txt     # Windows: .venv\Scripts\python.exe -m pip ...
+.venv/bin/python -m pytest -q                               # Flask API, classifier, severity, treatment planner
+cd ../server
+npm test                                                    # Express API against a mock ML service
 ```
 
 ## Disclaimer
