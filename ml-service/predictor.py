@@ -7,6 +7,7 @@ before a model has been trained; it only distinguishes generic symptom groups.
 import json
 import logging
 import os
+import platform
 import sys
 
 import numpy as np
@@ -102,8 +103,9 @@ def load_predictor():
         # Redistributable on Windows. Keep the service usable instead of crashing.
         hint = ""
         if sys.platform == "win32":
+            arch = "arm64" if platform.machine().lower() == "arm64" else "x64"
             hint = (" On Windows, install the Microsoft Visual C++ Redistributable "
-                    "(https://aka.ms/vs/17/release/vc_redist.x64.exe) and restart the ML service.")
+                    f"(https://aka.ms/vs/17/release/vc_redist.{arch}.exe) and restart the ML service.")
         return _fallback(f"Could not load onnxruntime ({exc}).{hint}")
     except Exception as exc:  # corrupt model file, unsupported ONNX version, ...
         return _fallback(f"Could not load the model {model_path} ({exc}).")

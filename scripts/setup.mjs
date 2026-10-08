@@ -4,8 +4,8 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  PY_MAX, PY_MIN, bold, dirs, exists, fail, green, isWin, pythonVersion, run, runNpm, unsupportedReason, venvPython,
-  yellow,
+  PY_MAX, PY_MIN, bold, dirs, exists, fail, green, isWin, pythonVersion, run, runNpm, unsupportedReason, vcRedistUrl,
+  venvPython, yellow,
 } from './common.mjs';
 
 const fmt = ([a, b]) => `${a}.${b}`;
@@ -105,7 +105,8 @@ if (ort.status !== 0) {
   console.log(yellow('  ⚠ onnxruntime is installed but cannot load, so the app will run in demo (heuristic) mode.'));
   if (isWin) {
     console.log(yellow('    Install the Microsoft Visual C++ Redistributable and run setup again:'));
-    console.log(yellow('    https://aka.ms/vs/17/release/vc_redist.x64.exe   (or: winget install Microsoft.VCRedist.2015+.x64)'));
+    const arm = /arm64/i.test(venvVersion.machine);
+    console.log(yellow(`    ${vcRedistUrl(venvVersion.machine)}   (or: winget install Microsoft.VCRedist.2015+.${arm ? 'arm64' : 'x64'})`));
   } else {
     console.log((ort.stderr || '').trim().split('\n').slice(-3).join('\n'));
   }

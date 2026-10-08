@@ -4,5 +4,5 @@ flask>=3.0,<4
 flask-cors>=4.0,<7
 numpy>=1.26,<3
 pillow>=10.0,<13
-onnxruntime>=1.17,<2
+onnxruntime>=1.18,<2
 gunicorn>=22.0,<27; sys_platform != "win32"

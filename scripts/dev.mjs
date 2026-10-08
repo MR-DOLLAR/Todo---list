@@ -111,13 +111,10 @@ process.on('SIGTERM', () => stop(0));
 const cyan = (s) => (process.stdout.isTTY ? `\x1b[36m${s}\x1b[0m` : s);
 const magenta = (s) => (process.stdout.isTTY ? `\x1b[35m${s}\x1b[0m` : s);
 
-// Some shells (e.g. tcsh) export HOST=<hostname>, so only an explicit
-// HOST=0.0.0.0 (open the app to other devices) is passed through to the API.
-const apiHost = process.env.HOST === '0.0.0.0' ? '0.0.0.0' : '127.0.0.1';
-start('ml', green, venvPython, ['app.py'], dirs.ml, { PORT: String(ML_PORT), HOST: '127.0.0.1', PYTHONUNBUFFERED: '1' });
+// The ML service is only ever called by the API, so it stays on localhost.
+start('ml', green, venvPython, ['app.py'], dirs.ml, { PORT: String(ML_PORT), LEAFCARE_HOST: '127.0.0.1', PYTHONUNBUFFERED: '1' });
 start('api', cyan, process.execPath, ['src/index.js'], dirs.server, {
   PORT: String(API_PORT),
-  HOST: apiHost,
   ML_SERVICE_URL: `http://127.0.0.1:${ML_PORT}`,
 });
 if (!prod) {
@@ -134,9 +131,12 @@ async function ready() {
       return false;
     }
   };
-  // Check through the URL the user will open, so a misrouted proxy can't be reported as ready.
+  // Wait for the API itself first (polling through Vite before the API listens
+  // makes Vite print proxy-error traces), then confirm through the URL the user
+  // will open, so a misrouted proxy can't be reported as ready.
   for (let i = 0; i < 120 && !stopping; i++) {
-    if (await ok(`${url}/api/health`, (b) => b.status === 'ok')) return true;
+    const api = await ok(`http://127.0.0.1:${API_PORT}/api/health`, (b) => b.status === 'ok');
+    if (api && (await ok(`${url}/api/health`, (b) => b.status === 'ok'))) return true;
     await new Promise((r) => setTimeout(r, 500));
   }
   return false;

@@ -64,14 +64,9 @@ Stop with `Ctrl+C`; start again later with `docker compose up` (after updating t
 `docker compose up --build` again so the images are rebuilt). Diagnosis history is kept in a Docker volume
 (`docker compose down -v` deletes it).
 
-Port 4000 already taken? Pick another host port, e.g. 4300, then open http://localhost:4300:
-
-```bash
-LEAFCARE_PORT=4300 docker compose up --build
-```
-
-(Windows PowerShell: `$env:LEAFCARE_PORT=4300; docker compose up --build` · Command Prompt:
-`set LEAFCARE_PORT=4300&& docker compose up --build`)
+Port 4000 already taken? Create a file named `.env` next to `docker-compose.yml` containing the line
+`LEAFCARE_PORT=4300` (any free port), run `docker compose up --build` again and open http://localhost:4300.
+Compose reads `.env` every time, so the setting sticks.
 
 ### Option 2 — Node.js + Python, one command
 
@@ -82,7 +77,8 @@ Requirements:
 | Node.js | 22 LTS recommended (20+) | [nodejs.org](https://nodejs.org) · Windows `winget install OpenJS.NodeJS.LTS` · macOS `brew install node@22` · Ubuntu: use nodejs.org/nvm (apt's version is too old) |
 | Python | 3.12 or 3.13 recommended (3.10–3.14) | [python.org](https://www.python.org/downloads/) · Windows `winget install Python.Python.3.13` · macOS `brew install python@3.13` · Ubuntu `sudo apt install python3 python3-venv` |
 
-Python 3.15 is not supported yet (no onnxruntime build); on Intel Macs use 3.10–3.13.
+Python 3.15 is not supported yet (no onnxruntime build); on Intel Macs use 3.10–3.13, on macOS 12 use 3.10–3.12,
+on Windows ARM use 3.11+. `npm run setup` checks this for you.
 
 ```bash
 npm run setup
@@ -155,16 +151,16 @@ Open **http://localhost:5173**. Keep all three terminals running.
 | --- | --- |
 | Red **“API offline”** banner | The API server (port 4000) isn't running — start it (option 3, terminal 2) or use `npm run dev`. |
 | Red **“ML offline”** banner / *“ML service is unavailable”* | The ML service (port 5001) isn't running — start it (option 3, terminal 1). |
-| Yellow **demo mode** banner on Windows mentioning onnxruntime | Install the [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (`winget install Microsoft.VCRedist.2015+.x64`) and restart. |
+| Yellow **demo mode** banner on Windows mentioning onnxruntime | Install the Microsoft Visual C++ Redistributable ([x64](https://aka.ms/vs/17/release/vc_redist.x64.exe) · [ARM64](https://aka.ms/vs/17/release/vc_redist.arm64.exe), or `winget install Microsoft.VCRedist.2015+.x64`) and restart. |
 | `python: command not found` (macOS/Linux) | Use `python3`. |
 | *“ensurepip is not available”* (Ubuntu/Debian) | `sudo apt install python3.X-venv` (X = the version setup printed, e.g. `python3.12-venv`), then run setup again. |
-| *“No matching distribution found for onnxruntime”* | Your Python version or CPU type has no onnxruntime build (e.g. Python 3.15, 32-bit Python, Python 3.14 on an Intel Mac). Install 64-bit Python 3.13, delete `ml-service/.venv`, run setup again. |
+| *“No matching distribution found for onnxruntime”* | Your Python version, OS version or CPU type has no onnxruntime build (e.g. Python 3.15; 32-bit Python 3.13+; Python 3.14 on an Intel Mac; Python 3.13 on macOS 12 → use 3.12). Install a supported 64-bit Python, delete `ml-service/.venv`, run setup again. `npm run setup` checks this and tells you which version to use. |
 | Setup or `npm run dev` says packages are missing | Run `npm run setup` again (it is safe to re-run). |
 | *“Port … is already in use”* / Docker *“port is already allocated”* | LeafCare (or another program) is already running on that port — stop it, or choose other ports (see [Configuration](#configuration); Docker: `LEAFCARE_PORT`). |
 | http://localhost:4000 says *“web interface has not been built”* | Expected in development mode: use http://localhost:5173, or run `npm start` / `npm run build` in `client/`. |
 | `npm install` prints audit warnings | Don't run `npm audit fix --force` (it makes breaking upgrades). |
 | Red *“This is a development server”* line from Flask | Expected for local use; Docker runs the ML service under gunicorn. |
-| Opening the app from your phone doesn't work | By default it only listens on this computer. Use Docker, or run `npm start` with `HOST=0.0.0.0`, then open `http://<your-computer's-IP>:4000` on the phone. |
+| Opening the app from your phone doesn't work | By default it only listens on this computer. Use Docker, or start with `LEAFCARE_HOST=0.0.0.0 npm start` (PowerShell: `$env:LEAFCARE_HOST='0.0.0.0'; npm start` · Command Prompt: `set LEAFCARE_HOST=0.0.0.0&& npm start`), then open `http://<your-computer's-IP>:4000` on the phone. |
 
 ## Model
 
@@ -259,12 +255,11 @@ Example `/predict` response (abridged):
 | Variable | Service | Default |
 | --- | --- | --- |
 | `PORT` | ml-service / server | `5001` / `4000` |
-| `HOST` | ml-service (`python app.py`) / server | `127.0.0.1` (Docker: `0.0.0.0`). Set the server's to `0.0.0.0` to open the app from a phone on your network |
+| `LEAFCARE_HOST` | ml-service (`python app.py`) / server | `127.0.0.1` (Docker: `0.0.0.0`). Set it to `0.0.0.0` for the server to open the app from a phone on your network |
 | `MODEL_DIR` | ml-service | `ml-service/models` |
 | `ML_SERVICE_URL` | server | `http://127.0.0.1:5001` |
 | `DATA_DIR` | server | `server/data` (history JSON + uploaded images) |
 | `CLIENT_DIST` | server | `client/dist` |
-
 | `LEAFCARE_API_URL` | client dev server (Vite proxy) | `http://127.0.0.1:4000` |
 | `LEAFCARE_PORT` | docker compose (host port) | `4000` |
 

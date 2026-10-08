@@ -106,7 +106,7 @@ if __name__ == "__main__":
     # 5001 rather than Flask's usual 5000, which macOS AirPlay Receiver occupies.
     # Only the Node API talks to this service, so listen on localhost by default.
     port = int(os.environ.get("PORT", 5001))
-    host = os.environ.get("HOST", "127.0.0.1")
+    host = os.environ.get("LEAFCARE_HOST", "").strip() or "127.0.0.1"
     app = create_app()
     print(f"LeafCare ML service on http://{host}:{port} (mode: {app.predictor.mode})", flush=True)
     app.run(host=host, port=port, debug=os.environ.get("FLASK_DEBUG") == "1")
