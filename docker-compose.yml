@@ -1,0 +1,24 @@
+services:
+  ml-service:
+    build: ./ml-service
+    volumes:
+      - ./ml-service/models:/app/models   # drop leaf_model.onnx + labels.json here
+    expose:
+      - "5000"
+
+  server:
+    build: ./server
+    environment:
+      ML_SERVICE_URL: http://ml-service:5000
+      DATA_DIR: /data
+      CLIENT_DIST: /client
+    volumes:
+      - server-data:/data
+      - ./client/dist:/client:ro
+    ports:
+      - "4000:4000"
+    depends_on:
+      - ml-service
+
+volumes:
+  server-data:

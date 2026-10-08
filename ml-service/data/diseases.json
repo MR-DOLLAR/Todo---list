@@ -1,0 +1,513 @@
+{
+  "Apple___Apple_scab": {
+    "crop": "Apple",
+    "name": "Apple Scab",
+    "type": "fungal",
+    "pathogen": "Venturia inaequalis",
+    "description": "A common fungal disease that causes dark, scabby lesions on leaves and fruit, reducing fruit quality and weakening trees.",
+    "symptoms": ["Olive-green to brown velvety spots on leaves", "Leaves curl, yellow and drop early", "Corky, cracked scabs on fruit"],
+    "causes": ["Cool, wet spring weather", "Infected fallen leaves that overwinter the fungus", "Poor air circulation in dense canopies"],
+    "treatment": {
+      "organic": ["Spray sulfur or lime-sulfur at green-tip through petal fall", "Apply copper soap early in the season", "Use Bacillus subtilis based biofungicides"],
+      "chemical": ["Captan or mancozeb protectant sprays every 7-10 days in wet weather", "Myclobutanil or difenoconazole for curative action within 48-72 h of infection"],
+      "cultural": ["Rake and destroy fallen leaves in autumn", "Prune to open the canopy", "Apply urea (5%) to fallen leaves to speed decomposition"]
+    },
+    "prevention": ["Plant scab-resistant varieties (e.g. Liberty, Enterprise)", "Avoid overhead irrigation", "Begin protective sprays at bud break"],
+    "spread_risk": "high",
+    "recovery_days": 30
+  },
+  "Apple___Black_rot": {
+    "crop": "Apple",
+    "name": "Black Rot",
+    "type": "fungal",
+    "pathogen": "Botryosphaeria obtusa",
+    "description": "A fungal disease causing leaf spots ('frog-eye'), fruit rot and limb cankers on apple trees.",
+    "symptoms": ["Purple-edged leaf spots with tan centres (frog-eye)", "Black, rotting fruit that mummifies", "Sunken reddish-brown cankers on branches"],
+    "causes": ["Infected mummified fruit and dead wood", "Warm, humid weather", "Wounds from pruning, insects or hail"],
+    "treatment": {
+      "organic": ["Prune out cankers 15 cm below visible damage", "Copper-based sprays during dormancy", "Remove mummified fruit"],
+      "chemical": ["Captan or thiophanate-methyl from petal fall through summer", "Combine with scab spray program"],
+      "cultural": ["Remove dead wood and fire-blight strikes", "Disinfect pruning tools between cuts"]
+    },
+    "prevention": ["Keep trees vigorous with balanced fertilisation", "Remove nearby wild or abandoned apple trees", "Clean up orchard debris"],
+    "spread_risk": "medium",
+    "recovery_days": 45
+  },
+  "Apple___Cedar_apple_rust": {
+    "crop": "Apple",
+    "name": "Cedar Apple Rust",
+    "type": "fungal",
+    "pathogen": "Gymnosporangium juniperi-virginianae",
+    "description": "A rust fungus that alternates between apple and juniper/cedar hosts, causing bright orange leaf spots.",
+    "symptoms": ["Bright yellow-orange spots on upper leaf surface", "Tube-like structures on leaf undersides", "Premature leaf drop"],
+    "causes": ["Nearby juniper or red cedar trees carrying galls", "Wet spring weather releasing spores"],
+    "treatment": {
+      "organic": ["Sulfur sprays from pink bud through early summer", "Remove galls from nearby junipers"],
+      "chemical": ["Myclobutanil or fenarimol at 7-10 day intervals during spore release"],
+      "cultural": ["Remove junipers within a few hundred metres where practical"]
+    },
+    "prevention": ["Choose rust-resistant apple varieties", "Inspect junipers for galls in late winter"],
+    "spread_risk": "medium",
+    "recovery_days": 30
+  },
+  "Cherry_(including_sour)___Powdery_mildew": {
+    "crop": "Cherry",
+    "name": "Powdery Mildew",
+    "type": "fungal",
+    "pathogen": "Podosphaera clandestina",
+    "description": "A fungal disease producing white powdery growth on leaves and shoots, reducing photosynthesis and fruit quality.",
+    "symptoms": ["White powdery patches on leaves", "Leaves curl upward and become distorted", "Stunted shoot growth"],
+    "causes": ["Warm days with high humidity", "Dense canopy and shade", "Excess nitrogen fertilisation"],
+    "treatment": {
+      "organic": ["Spray potassium bicarbonate or sulfur", "Neem oil every 7-14 days", "Milk spray (1:9 with water) for light infections"],
+      "chemical": ["Myclobutanil, trifloxystrobin or quinoxyfen", "Rotate fungicide groups to prevent resistance"],
+      "cultural": ["Prune to improve light and airflow", "Remove infected shoots"]
+    },
+    "prevention": ["Avoid excess nitrogen", "Water at soil level", "Begin sprays at first sign of disease"],
+    "spread_risk": "high",
+    "recovery_days": 21
+  },
+  "Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot": {
+    "crop": "Corn",
+    "name": "Gray Leaf Spot",
+    "type": "fungal",
+    "pathogen": "Cercospora zeae-maydis",
+    "description": "A foliar disease producing rectangular grey lesions that can severely reduce yield in humid regions.",
+    "symptoms": ["Narrow, rectangular tan-to-grey lesions bounded by leaf veins", "Lesions merge and blight entire leaves", "Lower leaves affected first"],
+    "causes": ["Corn residue left on the surface", "Prolonged leaf wetness and high humidity", "Continuous corn cropping"],
+    "treatment": {
+      "organic": ["Remove and destroy heavily infected lower leaves", "Apply Bacillus-based biofungicides early"],
+      "chemical": ["Strobilurin (azoxystrobin, pyraclostrobin) or triazole fungicides at tasseling", "Premixes such as azoxystrobin + propiconazole"],
+      "cultural": ["Rotate with non-host crops for 1-2 years", "Till under residue where erosion is not a concern"]
+    },
+    "prevention": ["Plant resistant hybrids", "Crop rotation", "Avoid dense planting in humid fields"],
+    "spread_risk": "high",
+    "recovery_days": 30
+  },
+  "Corn_(maize)___Common_rust_": {
+    "crop": "Corn",
+    "name": "Common Rust",
+    "type": "fungal",
+    "pathogen": "Puccinia sorghi",
+    "description": "A rust disease producing cinnamon-brown pustules on both leaf surfaces.",
+    "symptoms": ["Small, oval, powdery reddish-brown pustules", "Pustules on both upper and lower leaf surfaces", "Leaves yellow and die in severe cases"],
+    "causes": ["Wind-blown spores from southern regions", "Cool temperatures (16-23 °C) with heavy dew"],
+    "treatment": {
+      "organic": ["Sulfur dust applied early", "Remove heavily infected leaves in small plots"],
+      "chemical": ["Triazole (propiconazole, tebuconazole) or strobilurin fungicides when pustules first appear"],
+      "cultural": ["Plant early to avoid peak spore periods"]
+    },
+    "prevention": ["Use resistant hybrids", "Scout fields weekly from mid-season"],
+    "spread_risk": "high",
+    "recovery_days": 21
+  },
+  "Corn_(maize)___Northern_Leaf_Blight": {
+    "crop": "Corn",
+    "name": "Northern Leaf Blight",
+    "type": "fungal",
+    "pathogen": "Exserohilum turcicum",
+    "description": "A fungal disease producing long, cigar-shaped grey-green lesions that can cause significant yield loss.",
+    "symptoms": ["Cigar-shaped grey-green lesions 2-15 cm long", "Lesions turn tan with dark spore patches", "Lower leaves infected first"],
+    "causes": ["Infected crop residue", "Moderate temperatures (18-27 °C) with long dew periods"],
+    "treatment": {
+      "organic": ["Remove infected leaves", "Biofungicides containing Bacillus or Trichoderma"],
+      "chemical": ["Azoxystrobin, propiconazole or pyraclostrobin at first lesion appearance before tasseling"],
+      "cultural": ["Rotate crops", "Bury or remove residue"]
+    },
+    "prevention": ["Plant hybrids with Ht resistance genes", "Balanced fertilisation"],
+    "spread_risk": "medium",
+    "recovery_days": 30
+  },
+  "Grape___Black_rot": {
+    "crop": "Grape",
+    "name": "Black Rot",
+    "type": "fungal",
+    "pathogen": "Guignardia bidwellii",
+    "description": "A destructive fungal disease of grapes that can destroy an entire crop in warm, wet seasons.",
+    "symptoms": ["Small brown circular leaf spots with dark borders", "Black fruiting bodies within spots", "Berries shrivel into hard black mummies"],
+    "causes": ["Overwintering mummies and cane lesions", "Warm, rainy weather from bloom to veraison"],
+    "treatment": {
+      "organic": ["Copper or sulfur sprays from early shoot growth", "Remove all mummified berries"],
+      "chemical": ["Mancozeb, myclobutanil or captan from bud break to 4 weeks after bloom"],
+      "cultural": ["Prune to improve air movement", "Destroy infected clusters"]
+    },
+    "prevention": ["Sanitation during dormant pruning", "Train vines for open canopy", "Use resistant cultivars"],
+    "spread_risk": "high",
+    "recovery_days": 40
+  },
+  "Grape___Esca_(Black_Measles)": {
+    "crop": "Grape",
+    "name": "Esca (Black Measles)",
+    "type": "fungal",
+    "pathogen": "Phaeomoniella chlamydospora / Phaeoacremonium spp.",
+    "description": "A trunk disease complex causing 'tiger-stripe' leaf symptoms, berry spotting and gradual vine decline.",
+    "symptoms": ["Interveinal yellowing/reddening forming tiger stripes", "Dark spots on berries", "Sudden wilting (apoplexy) in hot weather"],
+    "causes": ["Fungi entering through large pruning wounds", "Stress from drought or heat"],
+    "treatment": {
+      "organic": ["Remove and burn infected wood", "Protect pruning wounds with Trichoderma-based paste"],
+      "chemical": ["No curative chemical; seal pruning wounds with fungicidal wound sealant (e.g. thiophanate-methyl paste)"],
+      "cultural": ["Trunk renewal by training a new shoot from below the infection", "Prune in dry weather and late in dormancy"]
+    },
+    "prevention": ["Avoid large pruning cuts", "Use clean nursery stock", "Double pruning to reduce wound exposure"],
+    "spread_risk": "low",
+    "recovery_days": 365
+  },
+  "Grape___Leaf_blight_(Isariopsis_Leaf_Spot)": {
+    "crop": "Grape",
+    "name": "Leaf Blight (Isariopsis Leaf Spot)",
+    "type": "fungal",
+    "pathogen": "Pseudocercospora vitis",
+    "description": "A foliar disease producing irregular dark brown spots that may cause premature defoliation.",
+    "symptoms": ["Irregular dark red-brown spots on leaves", "Spots coalesce into large blighted areas", "Early leaf drop"],
+    "causes": ["High humidity and warm temperatures", "Infected leaf debris"],
+    "treatment": {
+      "organic": ["Copper oxychloride or Bordeaux mixture sprays", "Remove infected leaves"],
+      "chemical": ["Mancozeb or carbendazim at 10-14 day intervals"],
+      "cultural": ["Collect and destroy fallen leaves", "Improve canopy ventilation"]
+    },
+    "prevention": ["Avoid overhead irrigation", "Maintain open canopy"],
+    "spread_risk": "medium",
+    "recovery_days": 30
+  },
+  "Orange___Haunglongbing_(Citrus_greening)": {
+    "crop": "Orange",
+    "name": "Huanglongbing (Citrus Greening)",
+    "type": "bacterial",
+    "pathogen": "Candidatus Liberibacter asiaticus (spread by Asian citrus psyllid)",
+    "description": "A devastating, incurable bacterial disease that causes blotchy mottled leaves, misshapen bitter fruit and eventual tree death.",
+    "symptoms": ["Asymmetrical blotchy yellow mottling on leaves", "Small, lopsided, bitter fruit that stays green", "Twig dieback and yellow shoots"],
+    "causes": ["Transmission by Asian citrus psyllid (Diaphorina citri)", "Infected grafting material"],
+    "treatment": {
+      "organic": ["Control psyllids with neem oil, horticultural oil or kaolin clay", "Release natural enemies such as Tamarixia radiata"],
+      "chemical": ["Systemic insecticides (imidacloprid, thiamethoxam) for psyllid control", "No cure: remove and destroy confirmed infected trees"],
+      "cultural": ["Enhanced nutrition programs to prolong productivity", "Report suspected cases to local agricultural authorities"]
+    },
+    "prevention": ["Buy certified disease-free nursery trees", "Monitor and control psyllids area-wide", "Remove infected trees promptly"],
+    "spread_risk": "high",
+    "recovery_days": null
+  },
+  "Peach___Bacterial_spot": {
+    "crop": "Peach",
+    "name": "Bacterial Spot",
+    "type": "bacterial",
+    "pathogen": "Xanthomonas arboricola pv. pruni",
+    "description": "A bacterial disease causing leaf spots, defoliation and pitted, cracked fruit.",
+    "symptoms": ["Small water-soaked spots that turn purple-brown", "Spots fall out leaving shot holes", "Pitted and cracked fruit"],
+    "causes": ["Warm, wet, windy weather", "Bacteria overwintering in twig cankers", "Sandy soils and stressed trees"],
+    "treatment": {
+      "organic": ["Copper sprays at leaf fall and bud swell", "Remove infected twigs"],
+      "chemical": ["Oxytetracycline sprays during the growing season", "Low-rate copper during the season (watch for leaf burn)"],
+      "cultural": ["Maintain tree vigour with proper fertilisation", "Plant windbreaks"]
+    },
+    "prevention": ["Choose resistant varieties", "Avoid planting on light sandy soils exposed to wind"],
+    "spread_risk": "medium",
+    "recovery_days": 30
+  },
+  "Pepper,_bell___Bacterial_spot": {
+    "crop": "Bell Pepper",
+    "name": "Bacterial Spot",
+    "type": "bacterial",
+    "pathogen": "Xanthomonas campestris pv. vesicatoria",
+    "description": "A bacterial disease producing leaf lesions and scabby fruit spots; spreads rapidly in warm rainy weather.",
+    "symptoms": ["Small water-soaked spots that turn brown with yellow halos", "Leaf yellowing and drop", "Raised scabby spots on fruit"],
+    "causes": ["Infected seed or transplants", "Splashing rain and overhead irrigation", "Warm temperatures (24-30 °C)"],
+    "treatment": {
+      "organic": ["Copper hydroxide sprays every 7-10 days", "Remove infected plants and debris"],
+      "chemical": ["Copper + mancozeb tank mix", "Acibenzolar-S-methyl to induce plant resistance"],
+      "cultural": ["Avoid working with wet plants", "Use drip irrigation"]
+    },
+    "prevention": ["Use certified disease-free seed (hot-water treated)", "Rotate away from peppers/tomatoes for 2-3 years", "Plant resistant varieties"],
+    "spread_risk": "high",
+    "recovery_days": 21
+  },
+  "Potato___Early_blight": {
+    "crop": "Potato",
+    "name": "Early Blight",
+    "type": "fungal",
+    "pathogen": "Alternaria solani",
+    "description": "A common fungal disease producing target-like concentric leaf spots, mainly on older leaves.",
+    "symptoms": ["Brown spots with concentric rings (target pattern)", "Yellow halo around lesions", "Lower, older leaves affected first"],
+    "causes": ["Alternating wet and dry periods", "Plant stress and nutrient deficiency", "Infected plant debris in soil"],
+    "treatment": {
+      "organic": ["Copper-based fungicide sprays", "Bacillus subtilis or Bacillus amyloliquefaciens biofungicides", "Remove infected lower leaves"],
+      "chemical": ["Chlorothalonil or mancozeb every 7-10 days", "Azoxystrobin or difenoconazole for heavier pressure"],
+      "cultural": ["Mulch to prevent soil splash", "Maintain adequate nitrogen and potassium"]
+    },
+    "prevention": ["Rotate crops (3-year cycle)", "Use certified seed potatoes", "Water at the base in the morning"],
+    "spread_risk": "medium",
+    "recovery_days": 21
+  },
+  "Potato___Late_blight": {
+    "crop": "Potato",
+    "name": "Late Blight",
+    "type": "oomycete",
+    "pathogen": "Phytophthora infestans",
+    "description": "A fast-spreading, highly destructive disease (cause of the Irish potato famine) that can destroy entire fields within days.",
+    "symptoms": ["Large dark water-soaked lesions on leaves", "White fuzzy growth on leaf undersides in humid conditions", "Brown, firm rot on tubers"],
+    "causes": ["Cool (10-20 °C), wet, humid weather", "Infected seed tubers and cull piles", "Airborne spores travelling long distances"],
+    "treatment": {
+      "organic": ["Copper fungicides applied preventively", "Immediately remove and bag infected plants (do not compost)"],
+      "chemical": ["Chlorothalonil or mancozeb protectants", "Systemic products such as cymoxanil, metalaxyl-M or mandipropamid at first sign"],
+      "cultural": ["Destroy volunteer potatoes and cull piles", "Kill vines 2-3 weeks before harvest to protect tubers"]
+    },
+    "prevention": ["Plant certified disease-free seed", "Use resistant varieties", "Follow local late-blight forecasting alerts"],
+    "spread_risk": "high",
+    "recovery_days": 14
+  },
+  "Squash___Powdery_mildew": {
+    "crop": "Squash",
+    "name": "Powdery Mildew",
+    "type": "fungal",
+    "pathogen": "Podosphaera xanthii / Erysiphe cichoracearum",
+    "description": "A very common fungal disease covering cucurbit leaves with white powder, reducing yield and fruit quality.",
+    "symptoms": ["White powdery spots on upper and lower leaf surfaces", "Leaves yellow, brown and die", "Reduced fruit size and flavour"],
+    "causes": ["Warm dry days with humid nights", "Crowded plantings", "Shade"],
+    "treatment": {
+      "organic": ["Potassium bicarbonate, sulfur or neem oil sprays", "Milk spray (1:9) weekly", "Remove heavily infected leaves"],
+      "chemical": ["Myclobutanil, trifloxystrobin or chlorothalonil", "Rotate fungicide classes"],
+      "cultural": ["Space plants for airflow", "Plant in full sun"]
+    },
+    "prevention": ["Grow resistant varieties", "Avoid excess nitrogen", "Start preventive sprays when conditions favour disease"],
+    "spread_risk": "high",
+    "recovery_days": 14
+  },
+  "Strawberry___Leaf_scorch": {
+    "crop": "Strawberry",
+    "name": "Leaf Scorch",
+    "type": "fungal",
+    "pathogen": "Diplocarpon earlianum",
+    "description": "A fungal disease causing purple blotches that merge until leaves look scorched.",
+    "symptoms": ["Small irregular purple spots on upper leaf surface", "Spots merge; leaf margins dry and look burnt", "Weakened plants with fewer runners"],
+    "causes": ["Infected leaves from previous season", "Warm wet weather", "Overhead irrigation"],
+    "treatment": {
+      "organic": ["Remove and destroy infected leaves after harvest", "Copper sprays in early spring"],
+      "chemical": ["Captan or myclobutanil from early bloom"],
+      "cultural": ["Renovate beds after harvest", "Avoid overcrowding"]
+    },
+    "prevention": ["Plant resistant cultivars", "Use drip irrigation", "Replace beds every 3-4 years"],
+    "spread_risk": "medium",
+    "recovery_days": 30
+  },
+  "Tomato___Bacterial_spot": {
+    "crop": "Tomato",
+    "name": "Bacterial Spot",
+    "type": "bacterial",
+    "pathogen": "Xanthomonas spp.",
+    "description": "A bacterial disease causing small dark leaf spots, defoliation and scabby fruit lesions.",
+    "symptoms": ["Small dark water-soaked spots on leaves", "Spots with yellow halos that may fall out", "Raised scabby spots on green fruit"],
+    "causes": ["Contaminated seed and transplants", "Warm, wet weather and splashing water"],
+    "treatment": {
+      "organic": ["Copper hydroxide sprays", "Remove infected leaves and debris"],
+      "chemical": ["Copper + mancozeb combination", "Acibenzolar-S-methyl as plant defence activator"],
+      "cultural": ["Avoid overhead watering", "Do not handle plants when wet"]
+    },
+    "prevention": ["Use certified pathogen-free seed", "Rotate crops for 2-3 years", "Disinfect stakes and tools"],
+    "spread_risk": "high",
+    "recovery_days": 21
+  },
+  "Tomato___Early_blight": {
+    "crop": "Tomato",
+    "name": "Early Blight",
+    "type": "fungal",
+    "pathogen": "Alternaria solani",
+    "description": "A widespread fungal disease producing target-like spots on older leaves and stem lesions.",
+    "symptoms": ["Brown lesions with concentric rings on lower leaves", "Yellowing around lesions", "Dark sunken spots at fruit stem end"],
+    "causes": ["Spores in soil and plant debris", "Warm humid weather", "Stressed or nutrient-deficient plants"],
+    "treatment": {
+      "organic": ["Copper or Bacillus subtilis sprays", "Prune lower infected leaves", "Mulch to prevent soil splash"],
+      "chemical": ["Chlorothalonil or mancozeb every 7-10 days", "Azoxystrobin or difenoconazole for severe infections"],
+      "cultural": ["Stake plants for airflow", "Water at the base"]
+    },
+    "prevention": ["Rotate crops (avoid solanaceous crops for 3 years)", "Use resistant varieties", "Keep plants well fed"],
+    "spread_risk": "medium",
+    "recovery_days": 21
+  },
+  "Tomato___Late_blight": {
+    "crop": "Tomato",
+    "name": "Late Blight",
+    "type": "oomycete",
+    "pathogen": "Phytophthora infestans",
+    "description": "An aggressive disease that can kill tomato plants within a week in cool, wet weather.",
+    "symptoms": ["Large greasy grey-green to brown blotches on leaves", "White mould on leaf undersides", "Firm brown rot on fruit"],
+    "causes": ["Cool, wet weather", "Airborne spores from nearby infected potatoes or tomatoes"],
+    "treatment": {
+      "organic": ["Copper sprays applied preventively", "Remove and bag infected plants immediately"],
+      "chemical": ["Chlorothalonil or mancozeb protectants", "Mandipropamid, cymoxanil or famoxadone for active infections"],
+      "cultural": ["Do not compost infected material", "Increase plant spacing"]
+    },
+    "prevention": ["Plant resistant varieties (e.g. 'Defiant', 'Mountain Magic')", "Avoid overhead irrigation", "Monitor local blight alerts"],
+    "spread_risk": "high",
+    "recovery_days": 14
+  },
+  "Tomato___Leaf_Mold": {
+    "crop": "Tomato",
+    "name": "Leaf Mold",
+    "type": "fungal",
+    "pathogen": "Passalora fulva",
+    "description": "A fungal disease mainly in greenhouses and high tunnels, favoured by high humidity.",
+    "symptoms": ["Pale green-yellow spots on upper leaf surface", "Olive-green to brown velvety mould underneath", "Leaves wither and drop"],
+    "causes": ["Relative humidity above 85%", "Poor ventilation in greenhouses"],
+    "treatment": {
+      "organic": ["Improve ventilation and reduce humidity", "Copper or Bacillus-based sprays", "Remove infected leaves"],
+      "chemical": ["Chlorothalonil, mancozeb or difenoconazole"],
+      "cultural": ["Prune lower leaves", "Heat and vent greenhouse in the evening to reduce condensation"]
+    },
+    "prevention": ["Use resistant varieties", "Space plants widely", "Keep humidity below 85%"],
+    "spread_risk": "medium",
+    "recovery_days": 14
+  },
+  "Tomato___Septoria_leaf_spot": {
+    "crop": "Tomato",
+    "name": "Septoria Leaf Spot",
+    "type": "fungal",
+    "pathogen": "Septoria lycopersici",
+    "description": "A fungal disease producing many small circular spots that cause heavy defoliation.",
+    "symptoms": ["Numerous small round spots with dark borders and grey centres", "Tiny black specks (pycnidia) in spot centres", "Lower leaves yellow and drop"],
+    "causes": ["Infected plant debris", "Splashing water", "Warm, wet weather"],
+    "treatment": {
+      "organic": ["Remove infected leaves", "Copper or Bacillus subtilis sprays"],
+      "chemical": ["Chlorothalonil or mancozeb every 7-10 days"],
+      "cultural": ["Mulch around plants", "Avoid overhead watering"]
+    },
+    "prevention": ["Rotate crops", "Remove solanaceous weeds", "Clean up debris at season end"],
+    "spread_risk": "medium",
+    "recovery_days": 21
+  },
+  "Tomato___Spider_mites Two-spotted_spider_mite": {
+    "crop": "Tomato",
+    "name": "Two-spotted Spider Mite",
+    "type": "pest",
+    "pathogen": "Tetranychus urticae",
+    "description": "Tiny sap-sucking mites that cause stippled, bronzed leaves and fine webbing, especially in hot dry weather.",
+    "symptoms": ["Fine yellow or white stippling on leaves", "Bronzed, dry leaves", "Fine webbing on leaf undersides"],
+    "causes": ["Hot, dry, dusty conditions", "Overuse of broad-spectrum insecticides killing natural predators"],
+    "treatment": {
+      "organic": ["Strong water spray to dislodge mites", "Insecticidal soap or neem oil", "Release predatory mites (Phytoseiulus persimilis)"],
+      "chemical": ["Miticides such as abamectin, bifenazate or spiromesifen", "Rotate miticide groups"],
+      "cultural": ["Keep plants well watered", "Remove heavily infested leaves"]
+    },
+    "prevention": ["Avoid broad-spectrum insecticides", "Maintain humidity", "Inspect leaf undersides regularly"],
+    "spread_risk": "medium",
+    "recovery_days": 14
+  },
+  "Tomato___Target_Spot": {
+    "crop": "Tomato",
+    "name": "Target Spot",
+    "type": "fungal",
+    "pathogen": "Corynespora cassiicola",
+    "description": "A fungal disease causing concentric ringed lesions on leaves, stems and fruit.",
+    "symptoms": ["Brown lesions with concentric rings and light centres", "Lesions may crack", "Sunken spots on fruit"],
+    "causes": ["Warm, humid conditions", "Infected crop debris"],
+    "treatment": {
+      "organic": ["Remove infected leaves", "Copper-based sprays"],
+      "chemical": ["Chlorothalonil, azoxystrobin or difenoconazole"],
+      "cultural": ["Improve airflow", "Prune lower leaves"]
+    },
+    "prevention": ["Crop rotation", "Destroy plant debris", "Avoid excessive nitrogen"],
+    "spread_risk": "medium",
+    "recovery_days": 21
+  },
+  "Tomato___Tomato_Yellow_Leaf_Curl_Virus": {
+    "crop": "Tomato",
+    "name": "Tomato Yellow Leaf Curl Virus",
+    "type": "viral",
+    "pathogen": "TYLCV (Begomovirus), spread by whiteflies",
+    "description": "A viral disease transmitted by whiteflies that stunts plants and drastically reduces yield. There is no cure.",
+    "symptoms": ["Upward curling and cupping of leaves", "Yellow leaf margins", "Stunted growth and flower drop"],
+    "causes": ["Silverleaf whitefly (Bemisia tabaci) transmission", "Infected transplants"],
+    "treatment": {
+      "organic": ["Remove and destroy infected plants", "Yellow sticky traps for whiteflies", "Neem oil or insecticidal soap for whitefly control"],
+      "chemical": ["Systemic insecticides (imidacloprid, cyantraniliprole) for whitefly control", "No chemical cure for the virus itself"],
+      "cultural": ["Use insect-proof netting in nurseries", "Remove weed hosts"]
+    },
+    "prevention": ["Plant TYLCV-resistant varieties", "Use reflective mulches", "Control whiteflies early"],
+    "spread_risk": "high",
+    "recovery_days": null
+  },
+  "Tomato___Tomato_mosaic_virus": {
+    "crop": "Tomato",
+    "name": "Tomato Mosaic Virus",
+    "type": "viral",
+    "pathogen": "ToMV (Tobamovirus)",
+    "description": "A highly stable, mechanically transmitted virus causing mottled leaves and reduced yields. There is no cure.",
+    "symptoms": ["Light and dark green mosaic mottling", "Distorted, fern-like leaves", "Uneven fruit ripening"],
+    "causes": ["Contaminated hands, tools and seed", "Tobacco products handled near plants"],
+    "treatment": {
+      "organic": ["Remove and destroy infected plants", "Disinfect tools with 10% bleach or milk solution"],
+      "chemical": ["No chemical cure available"],
+      "cultural": ["Wash hands before handling plants", "Avoid tobacco use near plants"]
+    },
+    "prevention": ["Use resistant varieties (Tm-2² gene)", "Use certified virus-free seed", "Sanitise greenhouse equipment"],
+    "spread_risk": "high",
+    "recovery_days": null
+  },
+
+  "Generic___Leaf_spot_or_blight": {
+    "crop": "Unknown",
+    "name": "Leaf Spot / Blight (general)",
+    "type": "fungal",
+    "pathogen": "Various fungi or bacteria (e.g. Alternaria, Septoria, Xanthomonas)",
+    "description": "Brown or black necrotic lesions consistent with a fungal or bacterial leaf spot or blight.",
+    "symptoms": ["Brown or black spots or patches", "Yellow halos around lesions", "Leaf drop in severe cases"],
+    "causes": ["Wet foliage and high humidity", "Infected plant debris", "Splashing water"],
+    "treatment": {
+      "organic": ["Remove affected leaves", "Copper-based or Bacillus subtilis sprays"],
+      "chemical": ["Broad-spectrum protectant such as chlorothalonil or mancozeb"],
+      "cultural": ["Water at soil level", "Improve spacing and airflow"]
+    },
+    "prevention": ["Rotate crops", "Clean up debris", "Use resistant varieties"],
+    "spread_risk": "medium",
+    "recovery_days": 21
+  },
+  "Generic___Powdery_mildew": {
+    "crop": "Unknown",
+    "name": "Powdery Mildew (general)",
+    "type": "fungal",
+    "pathogen": "Erysiphales fungi",
+    "description": "White powdery coating on the leaf surface typical of powdery mildew.",
+    "symptoms": ["White or grey powdery patches", "Distorted or yellowing leaves"],
+    "causes": ["Warm days, humid nights", "Poor air circulation"],
+    "treatment": {
+      "organic": ["Potassium bicarbonate, sulfur or neem oil sprays", "Milk spray (1:9) weekly"],
+      "chemical": ["Myclobutanil or trifloxystrobin"],
+      "cultural": ["Prune for airflow", "Remove badly affected leaves"]
+    },
+    "prevention": ["Plant in full sun", "Avoid excess nitrogen", "Use resistant varieties"],
+    "spread_risk": "high",
+    "recovery_days": 14
+  },
+  "Generic___Rust": {
+    "crop": "Unknown",
+    "name": "Rust (general)",
+    "type": "fungal",
+    "pathogen": "Pucciniales fungi",
+    "description": "Orange to reddish-brown pustules or spots characteristic of rust fungi.",
+    "symptoms": ["Orange, yellow or reddish-brown pustules", "Powdery spores that rub off", "Yellowing and early leaf drop"],
+    "causes": ["Long periods of leaf wetness", "Wind-blown spores", "Alternate host plants nearby"],
+    "treatment": {
+      "organic": ["Sulfur sprays", "Remove infected leaves"],
+      "chemical": ["Triazole fungicides (propiconazole, tebuconazole, myclobutanil)"],
+      "cultural": ["Avoid overhead irrigation", "Remove alternate hosts"]
+    },
+    "prevention": ["Use rust-resistant varieties", "Space plants for airflow"],
+    "spread_risk": "high",
+    "recovery_days": 21
+  },
+  "Generic___Chlorosis_or_viral_yellowing": {
+    "crop": "Unknown",
+    "name": "Chlorosis / Yellowing",
+    "type": "nutrient/viral",
+    "pathogen": "Nutrient deficiency (N, Fe, Mg) or viral infection",
+    "description": "Widespread yellowing of leaf tissue, which may indicate nutrient deficiency, root problems or a viral infection.",
+    "symptoms": ["Yellowing between or along veins", "Pale new or old growth", "Mottling or mosaic patterns (viral)"],
+    "causes": ["Nitrogen, iron or magnesium deficiency", "High soil pH locking out iron", "Waterlogging or root damage", "Insect-transmitted viruses"],
+    "treatment": {
+      "organic": ["Apply compost or balanced organic fertiliser", "Epsom salt (magnesium) foliar spray", "Chelated iron for iron chlorosis"],
+      "chemical": ["Balanced NPK fertiliser", "Control insect vectors (aphids, whiteflies) if viral"],
+      "cultural": ["Test soil pH and nutrients", "Improve drainage", "Remove plants with confirmed viral symptoms"]
+    },
+    "prevention": ["Regular soil testing", "Balanced fertilisation", "Vector control"],
+    "spread_risk": "low",
+    "recovery_days": 21
+  }
+}
