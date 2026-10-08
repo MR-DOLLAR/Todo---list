@@ -1,3 +1,5 @@
 torch>=2.2
 torchvision>=0.17
 onnx>=1.15
+onnxscript>=0.1     # required by the ONNX exporter in recent PyTorch versions
+timm>=1.0           # only needed for --arch timm:<model>

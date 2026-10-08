@@ -8,4 +8,6 @@ venv/
 server/data/
 ml-service/models/*
 !ml-service/models/.gitkeep
+!ml-service/models/leaf_model.onnx
+!ml-service/models/labels.json
 .env

@@ -98,3 +98,20 @@ def test_incurable_disease_plan():
     assert plan["curable"] is False
     assert plan["approach"] == "containment"
     assert plan["urgency"] in ("high", "critical")
+
+
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
+
+
+@pytest.mark.skipif(not os.path.exists(os.path.join(MODEL_DIR, "leaf_model.onnx")), reason="no trained model")
+def test_bundled_model_loads_and_predicts_known_labels():
+    from predictor import load_predictor
+
+    predictor = load_predictor()
+    assert predictor.mode == "model"
+    kb = KnowledgeBase()
+    assert all(kb.get(label) for label in predictor.labels)
+    top, _ = predictor.predict(Image.open(leaf_image(spots=(110, 60, 25), spot_count=10)), crop="Tomato")
+    assert top[0]["label"].startswith("Tomato___")
+    assert 0 < top[0]["confidence"] <= 1
+    assert top[0]["confidence"] >= top[-1]["confidence"]

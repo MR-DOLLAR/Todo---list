@@ -25,9 +25,11 @@ and predicts a treatment plan with a recovery prognosis.
 - **Knowledge base** – symptoms, causes, pathogen, organic/chemical/cultural treatments and prevention for every class.
 - **History & stats** – every diagnosis is stored with its image; dashboard of healthy vs diseased, severity, most common diseases.
 - **Disease library** – searchable by crop, name, symptom or pathogen.
-- **Works out of the box** – without a trained model the ML service falls back to a colour-heuristic classifier
-  that recognises generic symptom groups (leaf spot/blight, powdery mildew, rust, chlorosis, healthy). The UI shows
-  a "demo mode" banner in that case.
+- **Pre-trained model included** – `ml-service/models/leaf_model.onnx` (MobileNetV3, 17 MB) scores
+  **97.6 % top-1 / 99.7 % top-3** on 1,132 held-out PlantVillage images (see [Model](#model)).
+- **Fallback mode** – if the model file is removed, the ML service falls back to a colour-heuristic classifier
+  that recognises generic symptom groups (leaf spot/blight, powdery mildew, rust, chlorosis, healthy) and the UI
+  shows a "demo mode" banner.
 
 ## Quick start (local)
 
@@ -64,7 +66,22 @@ docker compose up --build
 
 Open http://localhost:4000.
 
-## Training the CNN
+## Model
+
+The bundled model is timm's `mobilenetv3_large_100` (ImageNet-pretrained) fine-tuned for 4 epochs on CPU
+(~12 min) on a 200-images-per-class subset of PlantVillage `color`:
+
+| Split | Images | Result |
+| --- | --- | --- |
+| Train / validation | 5,457 / 963 | 98.0 % val accuracy |
+| Held-out test (never seen in training) | 1,132 | **97.6 % top-1, 99.7 % top-3** |
+| End-to-end through the Node API | 114 | 97.4 %, ~22 ms per request on CPU |
+
+The remaining errors are mostly between look-alike diseases (corn gray leaf spot ↔ northern leaf blight).
+PlantVillage photos are single leaves on plain backgrounds; real field photos are harder, so expect lower accuracy
+in the wild and consider fine-tuning on your own photos.
+
+### Training your own
 
 1. Download PlantVillage and point at the `color` folder (one sub-folder per class).
 2. Train and export:
@@ -75,10 +92,21 @@ pip install -r train/requirements.txt
 python train/train.py --data-dir /path/to/plantvillage/color --epochs 5 --arch mobilenet_v3
 ```
 
-This writes `models/leaf_model.onnx` and `models/labels.json`. Restart the ML service and it picks up the model
-automatically (`GET /health` reports `"mode": "model"`). Transfer learning on PlantVillage typically reaches
-~97-99 % validation accuracy in a few epochs on a GPU. Real field photos are harder than PlantVillage's lab
-images, so expect lower accuracy in the wild; fine-tuning on your own photos helps.
+Behind a firewall that blocks `download.pytorch.org` / Hugging Face, pass local pretrained weights instead, e.g.
+the timm MobileNetV3 weights from GitHub releases:
+
+```bash
+curl -LO https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_large_100_ra-f55367f5.pth
+python train/train.py --data-dir /path/to/train --arch timm:mobilenetv3_large_100 \
+    --weights mobilenetv3_large_100_ra-f55367f5.pth --epochs 4
+```
+
+This writes `models/leaf_model.onnx` and `models/labels.json`; restart the ML service to pick them up
+(`GET /health` reports `"mode": "model"`). Evaluate on a held-out folder with the same inference code the service uses:
+
+```bash
+python train/evaluate.py --data-dir /path/to/test
+```
 
 Inference needs only `onnxruntime`, `numpy` and `Pillow`; PyTorch is only required for training.
 

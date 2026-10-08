@@ -26,15 +26,45 @@ IMAGE_SIZE = 224
 MEAN, STD = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
 
 
-def build_model(arch, num_classes):
+def build_model(arch, num_classes, weights_path=None):
+    """Build a classifier with ImageNet-pretrained weights.
+
+    `weights_path` loads backbone weights from a local file instead of downloading
+    them (useful offline or behind a firewall). `arch` may also be
+    `timm:<model_name>` to use any timm model (requires `pip install timm`).
+    """
+    if arch.startswith("timm:"):
+        import timm
+
+        model = timm.create_model(arch[5:], pretrained=weights_path is None, num_classes=num_classes)
+        if weights_path:
+            _load_backbone(model, weights_path)
+        return model
+    model = _torchvision_model(arch, num_classes, pretrained=weights_path is None)
+    if weights_path:
+        _load_backbone(model, weights_path)
+    return model
+
+
+def _load_backbone(model, weights_path):
+    state = torch.load(weights_path, map_location="cpu")
+    state = state.get("state_dict", state)
+    own = model.state_dict()
+    # Skip the ImageNet classifier head (shape mismatch with our class count).
+    kept = {k: v for k, v in state.items() if k in own and own[k].shape == v.shape}
+    model.load_state_dict(kept, strict=False)
+    print(f"Loaded {len(kept)}/{len(own)} tensors from {weights_path}")
+
+
+def _torchvision_model(arch, num_classes, pretrained=True):
     if arch == "mobilenet_v3":
-        model = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
+        model = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT if pretrained else None)
         model.classifier[-1] = nn.Linear(model.classifier[-1].in_features, num_classes)
     elif arch == "efficientnet_b0":
-        model = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
+        model = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT if pretrained else None)
         model.classifier[-1] = nn.Linear(model.classifier[-1].in_features, num_classes)
     elif arch == "resnet50":
-        model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT if pretrained else None)
         model.fc = nn.Linear(model.fc.in_features, num_classes)
     else:
         raise ValueError(f"Unknown arch {arch}")
@@ -88,11 +118,31 @@ def run_epoch(model, loader, criterion, device, optimizer=None):
     return loss_sum / total, correct / total
 
 
+def export_onnx(model, out_dir):
+    """Export to a single self-contained ONNX file (weights embedded)."""
+    import onnx
+
+    onnx_path = os.path.join(out_dir, "leaf_model.onnx")
+    torch.onnx.export(
+        model, torch.randn(1, 3, IMAGE_SIZE, IMAGE_SIZE), onnx_path,
+        input_names=["input"], output_names=["logits"],
+        dynamic_axes={"input": {0: "batch"}, "logits": {0: "batch"}}, opset_version=18,
+    )
+    # Newer exporters may write weights to a side-car .data file; fold them back in.
+    onnx.save(onnx.load(onnx_path), onnx_path, save_as_external_data=False)
+    data_file = onnx_path + ".data"
+    if os.path.exists(data_file):
+        os.remove(data_file)
+    return onnx_path
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--data-dir", required=True)
     p.add_argument("--out-dir", default=os.path.join(os.path.dirname(__file__), "..", "models"))
-    p.add_argument("--arch", default="mobilenet_v3", choices=["mobilenet_v3", "efficientnet_b0", "resnet50"])
+    p.add_argument("--arch", default="mobilenet_v3",
+                   help="mobilenet_v3 | efficientnet_b0 | resnet50 | timm:<model_name>")
+    p.add_argument("--weights", help="Local pretrained weights file (skips downloading)")
     p.add_argument("--epochs", type=int, default=5)
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--lr", type=float, default=1e-3)
@@ -104,7 +154,7 @@ def main():
     train_dl, val_dl, classes = loaders(args.data_dir, args.batch_size, args.val_split, args.workers)
     print(f"{len(classes)} classes, {len(train_dl.dataset)} train / {len(val_dl.dataset)} val images on {device}")
 
-    model = build_model(args.arch, len(classes)).to(device)
+    model = build_model(args.arch, len(classes), args.weights).to(device)
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
@@ -125,12 +175,7 @@ def main():
 
     model.load_state_dict(torch.load(ckpt, map_location=device))
     model.eval().cpu()
-    onnx_path = os.path.join(args.out_dir, "leaf_model.onnx")
-    torch.onnx.export(
-        model, torch.randn(1, 3, IMAGE_SIZE, IMAGE_SIZE), onnx_path,
-        input_names=["input"], output_names=["logits"],
-        dynamic_axes={"input": {0: "batch"}, "logits": {0: "batch"}}, opset_version=17,
-    )
+    onnx_path = export_onnx(model, args.out_dir)
     with open(os.path.join(args.out_dir, "labels.json"), "w", encoding="utf-8") as f:
         json.dump({"labels": classes, "image_size": IMAGE_SIZE, "arch": args.arch,
                    "val_accuracy": round(best_acc, 4)}, f, indent=2)
