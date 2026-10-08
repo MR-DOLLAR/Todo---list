@@ -105,6 +105,8 @@ def load_predictor():
             hint = (" On Windows, install the Microsoft Visual C++ Redistributable "
                     "(https://aka.ms/vs/17/release/vc_redist.x64.exe) and restart the ML service.")
         return _fallback(f"Could not load onnxruntime ({exc}).{hint}")
+    except Exception as exc:  # corrupt model file, unsupported ONNX version, ...
+        return _fallback(f"Could not load the model {model_path} ({exc}).")
 
 
 def _fallback(reason):

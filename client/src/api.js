@@ -1,5 +1,5 @@
 const API_DOWN =
-  'Cannot reach the LeafCare API server (port 4000). Is it running? Start it with "npm run dev" in server/ (or "npm run dev" from the repo root).';
+  'Cannot reach the LeafCare API server. Is it running? Start it with "npm run dev" in server/ (or "npm run dev" from the repo root).';
 
 async function request(url, options) {
   let res;

@@ -4,7 +4,8 @@
 // Ctrl+C stops everything.
 import net from 'node:net';
 import path from 'node:path';
-import { bold, dirs, exists, fail, green, red, runNpm, spawn, venvPython, yellow } from './common.mjs';
+import { spawnSync } from 'node:child_process';
+import { bold, dirs, exists, fail, green, isWin, red, runNpm, spawn, venvPython, yellow } from './common.mjs';
 
 const prod = process.argv.includes('--prod');
 const ML_PORT = Number(process.env.ML_PORT) || 5001;
@@ -16,8 +17,25 @@ const viteBin = path.join(dirs.client, 'node_modules', 'vite', 'bin', 'vite.js')
 if (!exists(venvPython) || !exists(path.join(dirs.server, 'node_modules')) || !exists(viteBin)) {
   fail(`Dependencies are not installed yet. Run ${bold('npm run setup')} first.`);
 }
+const deps = spawnSync(venvPython, ['-c', 'import flask, flask_cors, numpy, PIL'], { cwd: dirs.ml, encoding: 'utf8' });
+if (deps.status !== 0) fail(`The Python packages are not fully installed. Run ${bold('npm run setup')} again.`);
 
-function portFree(port) {
+// A port is taken if something accepts connections on it (any local address)
+// or if we cannot bind it ourselves.
+function canConnect(port, host) {
+  return new Promise((resolve) => {
+    const sock = net.connect({ port, host });
+    const done = (result) => {
+      sock.destroy();
+      resolve(result);
+    };
+    sock.setTimeout(500, () => done(false));
+    sock.once('connect', () => done(true));
+    sock.once('error', () => done(false));
+  });
+}
+
+function canBind(port) {
   return new Promise((resolve) => {
     const srv = net.createServer();
     srv.once('error', () => resolve(false));
@@ -26,12 +44,20 @@ function portFree(port) {
   });
 }
 
+async function portFree(port) {
+  if ((await canConnect(port, '127.0.0.1')) || (await canConnect(port, '::1'))) return false;
+  return canBind(port);
+}
+
+const command = prod ? 'npm start' : 'npm run dev';
+const envExample = (name, value) =>
+  isWin ? `set ${name}=${value}&& ${command}   (PowerShell: $env:${name}=${value}; ${command})` : `${name}=${value} ${command}`;
 const ports = [[ML_PORT, 'ML service', 'ML_PORT'], [API_PORT, 'API server', 'PORT']];
 if (!prod) ports.push([WEB_PORT, 'web dev server', null]);
 for (const [port, name, envVar] of ports) {
   if (!(await portFree(port))) {
-    fail(`Port ${port} (needed by the ${name}) is already in use — is LeafCare already running in another terminal?` +
-      (envVar ? ` Stop that program, or choose another port, e.g. ${envVar}=${port + 10} npm run dev` : ' Stop that program first.'));
+    fail(`Port ${port} (needed by the ${name}) is already in use — is LeafCare already running in another terminal?\n  ` +
+      (envVar ? `Stop that program, or choose another port, e.g.  ${envExample(envVar, port + 10)}` : 'Stop that program first.'));
   }
 }
 
@@ -85,12 +111,18 @@ process.on('SIGTERM', () => stop(0));
 const cyan = (s) => (process.stdout.isTTY ? `\x1b[36m${s}\x1b[0m` : s);
 const magenta = (s) => (process.stdout.isTTY ? `\x1b[35m${s}\x1b[0m` : s);
 
-start('ml', green, venvPython, ['app.py'], dirs.ml, { PORT: String(ML_PORT), PYTHONUNBUFFERED: '1' });
+// Some shells (e.g. tcsh) export HOST=<hostname>, so only an explicit
+// HOST=0.0.0.0 (open the app to other devices) is passed through to the API.
+const apiHost = process.env.HOST === '0.0.0.0' ? '0.0.0.0' : '127.0.0.1';
+start('ml', green, venvPython, ['app.py'], dirs.ml, { PORT: String(ML_PORT), HOST: '127.0.0.1', PYTHONUNBUFFERED: '1' });
 start('api', cyan, process.execPath, ['src/index.js'], dirs.server, {
   PORT: String(API_PORT),
+  HOST: apiHost,
   ML_SERVICE_URL: `http://127.0.0.1:${ML_PORT}`,
 });
-if (!prod) start('web', magenta, process.execPath, [viteBin, '--strictPort'], dirs.client);
+if (!prod) {
+  start('web', magenta, process.execPath, [viteBin], dirs.client, { LEAFCARE_API_URL: `http://127.0.0.1:${API_PORT}` });
+}
 
 // Wait until the API reports the ML service healthy (and Vite is up in dev mode).
 async function ready() {
@@ -102,17 +134,16 @@ async function ready() {
       return false;
     }
   };
+  // Check through the URL the user will open, so a misrouted proxy can't be reported as ready.
   for (let i = 0; i < 120 && !stopping; i++) {
-    const api = await ok(`http://127.0.0.1:${API_PORT}/api/health`, (b) => b.status === 'ok');
-    const web = prod || (await ok(`http://localhost:${WEB_PORT}/`));
-    if (api && web) return true;
+    if (await ok(`${url}/api/health`, (b) => b.status === 'ok')) return true;
     await new Promise((r) => setTimeout(r, 500));
   }
   return false;
 }
 
 if (await ready()) {
-  const health = await fetch(`http://127.0.0.1:${API_PORT}/api/health`).then((r) => r.json()).catch(() => ({}));
+  const health = await fetch(`${url}/api/health`).then((r) => r.json()).catch(() => ({}));
   const mode = health.ml?.mode === 'model' ? `trained model, ${health.ml.classes} classes` : yellow('demo (heuristic) mode');
   console.log(`\n  ${green('✔ LeafCare is running')} (${mode})\n\n    Open ${bold(url)} in your browser.  Press Ctrl+C to stop.\n`);
 } else if (!stopping) {

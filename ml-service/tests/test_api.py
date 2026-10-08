@@ -132,3 +132,14 @@ def test_falls_back_to_heuristic_when_onnxruntime_cannot_load(monkeypatch):
     health = create_app(predictor=fallback).test_client().get("/health").get_json()
     assert health["mode"] == "heuristic"
     assert "DLL load failed" in health["fallback_reason"]
+
+
+def test_falls_back_to_heuristic_when_model_file_is_corrupt(tmp_path, monkeypatch):
+    import predictor
+
+    (tmp_path / "leaf_model.onnx").write_bytes(b"not an onnx model")
+    (tmp_path / "labels.json").write_text('{"labels": ["Tomato___healthy"]}')
+    monkeypatch.setattr(predictor, "MODEL_DIR", str(tmp_path))
+    fallback = predictor.load_predictor()
+    assert fallback.mode == "heuristic"
+    assert "Could not load the model" in fallback.fallback_reason

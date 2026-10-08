@@ -15,9 +15,15 @@ export default function Diagnose() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Keep retrying while the list is empty, e.g. if the page opened before the
+  // ML service was up.
   useEffect(() => {
-    api.crops().then(setCrops).catch(() => {});
-  }, []);
+    if (crops.length) return undefined;
+    const load = () => api.crops().then(setCrops).catch(() => {});
+    load();
+    const timer = setInterval(load, 10000);
+    return () => clearInterval(timer);
+  }, [crops.length]);
 
   useEffect(() => {
     if (!file) return setPreview(null);

@@ -31,19 +31,35 @@ export function fail(message) {
   process.exit(1);
 }
 
+// Returns [major, minor] with .machine and .bits attached, or null.
 export function pythonVersion(cmd, args = []) {
-  const r = spawnSync(cmd, [...args, '-c', 'import sys; print("%d.%d" % sys.version_info[:2])'], {
-    encoding: 'utf8',
-    timeout: 20000,
-  });
+  const probe = 'import sys, platform, struct; print("%d.%d %s %d" % (sys.version_info[0], sys.version_info[1], ' +
+    'platform.machine(), struct.calcsize("P") * 8))';
+  const r = spawnSync(cmd, [...args, '-c', probe], { encoding: 'utf8', timeout: 20000 });
   if (r.status !== 0 || !r.stdout) return null;
-  const [major, minor] = r.stdout.trim().split('.').map(Number);
-  return Number.isInteger(major) && Number.isInteger(minor) ? [major, minor] : null;
+  const [ver, machine = '', bits = '64'] = r.stdout.trim().split(/\s+/);
+  const [major, minor] = ver.split('.').map(Number);
+  if (!Number.isInteger(major) || !Number.isInteger(minor)) return null;
+  return Object.assign([major, minor], { machine: machine.toLowerCase(), bits: Number(bits) });
 }
 
-export function supported([major, minor]) {
+// Why onnxruntime can't be installed for this interpreter, or null if it can.
+export function unsupportedReason(version) {
+  const [major, minor] = version;
   const v = major * 100 + minor;
-  return v >= PY_MIN[0] * 100 + PY_MIN[1] && v <= PY_MAX[0] * 100 + PY_MAX[1];
+  const label = `Python ${major}.${minor}`;
+  if (v < PY_MIN[0] * 100 + PY_MIN[1] || v > PY_MAX[0] * 100 + PY_MAX[1]) {
+    return `${label} is not supported (need ${PY_MIN.join('.')}–${PY_MAX.join('.')})`;
+  }
+  if (version.bits === 32) return `${label} is 32-bit; onnxruntime needs 64-bit Python`;
+  if (process.platform === 'darwin' && ['x86_64', 'i386'].includes(version.machine) && v > 313) {
+    return `${label} on an Intel Mac has no onnxruntime build (use 3.10–3.13)`;
+  }
+  return null;
+}
+
+export function supported(version) {
+  return unsupportedReason(version) === null;
 }
 
 // Run npm without a shell where possible: `npm run x` sets npm_execpath to
@@ -51,8 +67,10 @@ export function supported([major, minor]) {
 export function npmCommand(args) {
   const cli = process.env.npm_execpath;
   if (cli && cli.endsWith('.js')) return { cmd: process.execPath, args: [cli, ...args], shell: false };
-  // Windows needs a shell to run npm.cmd.
-  return { cmd: 'npm', args, shell: isWin };
+  // Windows needs a shell to run npm.cmd; pass one command string (passing an
+  // args array with shell:true is deprecated in Node 24).
+  if (isWin) return { cmd: ['npm', ...args].join(' '), args: [], shell: true };
+  return { cmd: 'npm', args, shell: false };
 }
 
 export function run(cmd, args, opts = {}) {

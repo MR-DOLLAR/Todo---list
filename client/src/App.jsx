@@ -37,7 +37,7 @@ export default function App() {
       )}
       {health?.status === 'api-down' && (
         <div className="banner banner-bad">
-          Cannot reach the LeafCare API server on port 4000. Start it with <code>npm run dev</code> in{' '}
+          Cannot reach the LeafCare API server. Start it with <code>npm run dev</code> in{' '}
           <code>server/</code>, or run <code>npm run dev</code> from the repo root to start everything.
         </div>
       )}

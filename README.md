@@ -60,8 +60,18 @@ docker compose up --build
 ```
 
 Wait for the build (a few minutes the first time), then open **http://localhost:4000**.
-Stop with `Ctrl+C`; start again later with `docker compose up`. Diagnosis history is kept in a Docker volume
+Stop with `Ctrl+C`; start again later with `docker compose up` (after updating the code, use
+`docker compose up --build` again so the images are rebuilt). Diagnosis history is kept in a Docker volume
 (`docker compose down -v` deletes it).
+
+Port 4000 already taken? Pick another host port, e.g. 4300, then open http://localhost:4300:
+
+```bash
+LEAFCARE_PORT=4300 docker compose up --build
+```
+
+(Windows PowerShell: `$env:LEAFCARE_PORT=4300; docker compose up --build` · Command Prompt:
+`set LEAFCARE_PORT=4300&& docker compose up --build`)
 
 ### Option 2 — Node.js + Python, one command
 
@@ -75,11 +85,14 @@ Requirements:
 Python 3.15 is not supported yet (no onnxruntime build); on Intel Macs use 3.10–3.13.
 
 ```bash
-npm run setup    # once: creates ml-service/.venv and installs all Python + npm packages (~1-3 min)
-npm run dev      # starts the ML service, API server and web app together
+npm run setup
+npm run dev
 ```
 
-Open **http://localhost:5173**. Press `Ctrl+C` to stop everything. Next time, just run `npm run dev`.
+`npm run setup` is needed only once: it creates `ml-service/.venv` and installs all Python and npm packages
+(about 1–3 minutes). `npm run dev` starts the ML service, API server and web app together; wait for
+*“✔ LeafCare is running”*, then open **http://localhost:5173**. Press `Ctrl+C` to stop everything.
+Next time, just run `npm run dev`.
 
 | Command | What it does |
 | --- | --- |
@@ -144,11 +157,14 @@ Open **http://localhost:5173**. Keep all three terminals running.
 | Red **“ML offline”** banner / *“ML service is unavailable”* | The ML service (port 5001) isn't running — start it (option 3, terminal 1). |
 | Yellow **demo mode** banner on Windows mentioning onnxruntime | Install the [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (`winget install Microsoft.VCRedist.2015+.x64`) and restart. |
 | `python: command not found` (macOS/Linux) | Use `python3`. |
-| *“ensurepip is not available”* (Ubuntu/Debian) | `sudo apt install python3-venv`, delete `ml-service/.venv`, run setup again. |
-| *“Port … is already in use”* | LeafCare (or another program) is already running on that port — stop it first. |
+| *“ensurepip is not available”* (Ubuntu/Debian) | `sudo apt install python3.X-venv` (X = the version setup printed, e.g. `python3.12-venv`), then run setup again. |
+| *“No matching distribution found for onnxruntime”* | Your Python version or CPU type has no onnxruntime build (e.g. Python 3.15, 32-bit Python, Python 3.14 on an Intel Mac). Install 64-bit Python 3.13, delete `ml-service/.venv`, run setup again. |
+| Setup or `npm run dev` says packages are missing | Run `npm run setup` again (it is safe to re-run). |
+| *“Port … is already in use”* / Docker *“port is already allocated”* | LeafCare (or another program) is already running on that port — stop it, or choose other ports (see [Configuration](#configuration); Docker: `LEAFCARE_PORT`). |
 | http://localhost:4000 says *“web interface has not been built”* | Expected in development mode: use http://localhost:5173, or run `npm start` / `npm run build` in `client/`. |
 | `npm install` prints audit warnings | Don't run `npm audit fix --force` (it makes breaking upgrades). |
 | Red *“This is a development server”* line from Flask | Expected for local use; Docker runs the ML service under gunicorn. |
+| Opening the app from your phone doesn't work | By default it only listens on this computer. Use Docker, or run `npm start` with `HOST=0.0.0.0`, then open `http://<your-computer's-IP>:4000` on the phone. |
 
 ## Model
 
@@ -172,9 +188,11 @@ in the wild and consider fine-tuning on your own photos.
 
 ```bash
 cd ml-service
-.venv/bin/python -m pip install -r train/requirements.txt      # Windows: .venv\Scripts\python.exe -m pip ...
+.venv/bin/python -m pip install -r train/requirements.txt
 .venv/bin/python train/train.py --data-dir /path/to/plantvillage/color --epochs 5 --arch mobilenet_v3
 ```
+
+On Windows use `.venv\Scripts\python.exe` in place of `.venv/bin/python`.
 
 PyTorch wheels exist for Python 3.10–3.14 (Intel Macs: up to 3.12). Training on a CPU works but is slow on the
 full dataset; a GPU is recommended.
@@ -241,28 +259,37 @@ Example `/predict` response (abridged):
 | Variable | Service | Default |
 | --- | --- | --- |
 | `PORT` | ml-service / server | `5001` / `4000` |
-| `HOST` | ml-service (`python app.py`) | `127.0.0.1` |
+| `HOST` | ml-service (`python app.py`) / server | `127.0.0.1` (Docker: `0.0.0.0`). Set the server's to `0.0.0.0` to open the app from a phone on your network |
 | `MODEL_DIR` | ml-service | `ml-service/models` |
 | `ML_SERVICE_URL` | server | `http://127.0.0.1:5001` |
 | `DATA_DIR` | server | `server/data` (history JSON + uploaded images) |
 | `CLIENT_DIST` | server | `client/dist` |
 
-When using `npm run dev` / `npm start`, set `ML_PORT` and `PORT` to change the ML and API ports.
+| `LEAFCARE_API_URL` | client dev server (Vite proxy) | `http://127.0.0.1:4000` |
+| `LEAFCARE_PORT` | docker compose (host port) | `4000` |
+
+With `npm run dev` / `npm start`, set `ML_PORT` and `PORT` to change the ML and API ports, e.g.
+`PORT=4010 npm run dev` (PowerShell: `$env:PORT=4010; npm run dev` · Command Prompt: `set PORT=4010&& npm run dev`).
+The dev web server always uses port 5173.
 
 ## Tests
 
+After `npm run setup`, run both test suites with:
+
 ```bash
-npm test     # after npm run setup: runs both suites below
+npm test
 ```
 
-Or individually, from the project folder:
+Or individually, from the project folder. The Python suite covers the Flask API, classifier, severity and
+treatment planner; the Node suite tests the Express API against a mock ML service. On Windows use
+`.venv\Scripts\python.exe` in place of `.venv/bin/python`.
 
 ```bash
 cd ml-service
-.venv/bin/python -m pip install -r requirements-dev.txt     # Windows: .venv\Scripts\python.exe -m pip ...
-.venv/bin/python -m pytest -q                               # Flask API, classifier, severity, treatment planner
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m pytest -q
 cd ../server
-npm test                                                    # Express API against a mock ML service
+npm test
 ```
 
 ## Disclaimer

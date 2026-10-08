@@ -1,4 +1,5 @@
 # One-command start: docker compose up --build   → http://localhost:4000
+# Different host port: LEAFCARE_PORT=4300 docker compose up --build
 services:
   ml-service:
     build: ./ml-service
@@ -12,12 +13,13 @@ services:
       context: .
       dockerfile: server/Dockerfile
     restart: unless-stopped
+    init: true   # forwards Ctrl+C / docker stop to node so it exits immediately
     environment:
       ML_SERVICE_URL: http://ml-service:5001
     volumes:
       - server-data:/data   # diagnosis history + uploaded images
     ports:
-      - "4000:4000"
+      - "${LEAFCARE_PORT:-4000}:4000"
     depends_on:
       ml-service:
         condition: service_healthy
