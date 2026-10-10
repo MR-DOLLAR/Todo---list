@@ -17,7 +17,7 @@ import sys
 from PIL import Image, ImageOps
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from predictor import OnnxPredictor, _crop_key  # noqa: E402
+from predictor import CROP_SUPPORT_MIN, OnnxPredictor, _crop_key  # noqa: E402
 
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
@@ -34,7 +34,7 @@ def main():
     per_class = collections.defaultdict(lambda: [0, 0])
     confusions = collections.Counter()
     n = top1 = top3 = crop_ok = hinted = 0
-    confident = confident_ok = 0
+    confident = confident_ok = hint_confident = hint_confident_ok = 0
 
     for label in sorted(os.listdir(args.data_dir)):
         folder = os.path.join(args.data_dir, label)
@@ -62,6 +62,10 @@ def main():
             if top[0]["confidence"] >= predictor.threshold:
                 confident += 1
                 confident_ok += right
+            # Same rule as the service when a crop is selected.
+            if hint_top[0]["confidence"] >= predictor.threshold and hint_top[0]["crop_support"] >= CROP_SUPPORT_MIN:
+                hint_confident += 1
+                hint_confident_ok += hint_top[0]["label"] == label
 
     print(f"{n} images")
     print(f"Top-1 accuracy:            {top1 / n:.3f}")
@@ -71,6 +75,8 @@ def main():
     print(f"Confidence threshold {predictor.threshold}: {confident / n:.1%} of photos get a confident answer, "
           f"{(confident_ok / confident if confident else 0):.1%} of those are right; "
           f"{1 - confident / n:.1%} are reported as 'not sure'")
+    print(f"  with the crop selected: {hint_confident / n:.1%} confident, "
+          f"{(hint_confident_ok / hint_confident if hint_confident else 0):.1%} of those right")
     print("\nLowest per-class accuracy:")
     for label, (c, k) in sorted(per_class.items(), key=lambda kv: kv[1][0] / kv[1][1])[:8]:
         print(f"  {c / k:6.1%}  {label} ({c}/{k})")
