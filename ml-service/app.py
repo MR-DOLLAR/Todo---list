@@ -4,15 +4,23 @@ import os
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
-from image_analysis import severity_from_analysis
+from image_analysis import photo_warnings, severity_from_analysis
 from knowledge import KnowledgeBase
 from predictor import load_predictor
 from treatment import build_plan
 
 MAX_UPLOAD_MB = 10
 PREFERENCES = {"integrated", "organic", "chemical"}
+STATUS_MESSAGES = {
+    "confident": None,
+    "uncertain": ("The model is not sure about this photo. The most likely matches are listed below. For a "
+                  "better result, photograph one leaf close-up in daylight so it fills the frame, and select "
+                  "the crop. Crops it doesn't know can't be diagnosed."),
+    "no_leaf": ("No leaf was found in this photo. Photograph a single leaf close-up, in daylight, so it fills "
+                "most of the frame."),
+}
 
 
 def create_app(predictor=None, kb=None):
@@ -39,6 +47,8 @@ def create_app(predictor=None, kb=None):
         try:
             image = Image.open(io.BytesIO(file.read()))
             image.load()
+            # Phone photos are often stored sideways with a rotation tag.
+            image = ImageOps.exif_transpose(image)
         except (UnidentifiedImageError, OSError):
             return jsonify(error="File is not a valid image"), 400
 
@@ -53,14 +63,27 @@ def create_app(predictor=None, kb=None):
         if disease is None:
             return jsonify(error=f"No knowledge-base entry for label {best['label']}"), 500
 
+        threshold = getattr(app.predictor, "threshold", 0.0)
+        uncertain = best["confidence"] < threshold
+        # Very little plant-coloured tissue and an unsure model: probably not a leaf.
+        if uncertain and analysis.leaf_fraction < 0.05:
+            status = "no_leaf"
+        else:
+            status = "uncertain" if uncertain else "confident"
+
         severity = severity_from_analysis(analysis, disease["healthy"])
-        plan = build_plan(disease, severity, best["confidence"], preference)
+        plan = build_plan(disease, severity, best["confidence"], preference, uncertain=uncertain)
 
         return jsonify(
             mode=app.predictor.mode,
+            status=status,
+            message=STATUS_MESSAGES[status],
+            supported_crops=app.kb.crops(),
+            photo_warnings=photo_warnings(image, analysis),
             prediction={
                 "label": best["label"],
                 "confidence": round(best["confidence"], 4),
+                "threshold": round(threshold, 4),
                 "crop": disease["crop"],
                 "disease": disease["name"],
                 "healthy": disease["healthy"],

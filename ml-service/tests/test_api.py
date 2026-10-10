@@ -143,3 +143,91 @@ def test_falls_back_to_heuristic_when_model_file_is_corrupt(tmp_path, monkeypatc
     fallback = predictor.load_predictor()
     assert fallback.mode == "heuristic"
     assert "Could not load the model" in fallback.fallback_reason
+
+
+class StubPredictor:
+    """Returns a fixed prediction and records the image it was given."""
+    mode = "model"
+    labels = ["Tomato___Early_blight", "Tomato___healthy", "Tomato___Tomato_Yellow_Leaf_Curl_Virus"]
+
+    def __init__(self, label="Tomato___Early_blight", confidence=0.9, threshold=0.6):
+        self.label, self.confidence, self.threshold = label, confidence, threshold
+        self.seen = None
+
+    def predict(self, image, crop=None, top_k=3):
+        from image_analysis import analyze_leaf
+
+        self.seen = image
+        rest = (1 - self.confidence) / 2
+        others = [lab for lab in self.labels if lab != self.label][:2]
+        top = [{"label": self.label, "confidence": self.confidence}] + [{"label": o, "confidence": rest} for o in others]
+        return top, analyze_leaf(image)
+
+
+def stub_client(**kwargs):
+    stub = StubPredictor(**kwargs)
+    return create_app(predictor=stub).test_client(), stub
+
+
+def test_confident_prediction_has_status_and_full_plan():
+    client, _ = stub_client(confidence=0.9)
+    body = post(client, leaf_image(spots=(110, 60, 25), spot_count=10)).get_json()
+    assert body["status"] == "confident"
+    assert body["message"] is None
+    assert body["treatment_plan"]["approach"] in ("organic", "integrated")
+    assert "Tomato" in body["supported_crops"]
+
+
+def test_low_confidence_is_reported_as_uncertain_with_non_chemical_plan():
+    client, _ = stub_client(confidence=0.4)
+    body = post(client, leaf_image(spots=(110, 60, 25), spot_count=10), preference="chemical").get_json()
+    assert body["status"] == "uncertain"
+    assert "not sure" in body["message"]
+    plan = body["treatment_plan"]
+    assert plan["approach"] == "organic"
+    assert plan["summary"].startswith("Possibly Early Blight")
+    assert any("not sure" in w for w in plan["warnings"])
+
+
+def test_uncertain_incurable_disease_never_says_destroy_plants():
+    client, _ = stub_client(label="Tomato___Tomato_Yellow_Leaf_Curl_Virus", confidence=0.3)
+    plan = post(client, leaf_image(spots=(200, 200, 60), spot_count=8)).get_json()["treatment_plan"]
+    assert plan["approach"] == "confirm first"
+    actions = " ".join(a for step in plan["steps"] for a in step["actions"]).lower()
+    assert "destroy" not in actions and "remove and" not in actions
+
+
+def test_photo_without_a_leaf_is_reported():
+    client, _ = stub_client(confidence=0.3)
+    img = Image.new("RGB", (256, 256), (40, 90, 200))  # blue sky, no plant colours
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    body = post(client, buf).get_json()
+    assert body["status"] == "no_leaf"
+    assert "No leaf" in body["message"]
+
+
+def test_exif_rotation_is_applied_before_prediction():
+    client, stub = stub_client()
+    img = Image.new("RGB", (300, 100), (50, 140, 45))
+    exif = img.getexif()
+    exif[0x0112] = 6  # stored sideways: rotate 90° clockwise to view
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", exif=exif)
+    buf.seek(0)
+    assert post(client, buf).status_code == 200
+    assert stub.seen.size == (100, 300)
+
+
+def test_photo_warnings_flag_blurry_and_tiny_images():
+    from PIL import ImageFilter
+
+    client, _ = stub_client()
+    img = Image.open(leaf_image(spots=(110, 60, 25), spot_count=10)).resize((120, 120)).filter(ImageFilter.GaussianBlur(4))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    warnings = post(client, buf).get_json()["photo_warnings"]
+    assert any("small" in w for w in warnings)
+    assert any("blurry" in w for w in warnings)

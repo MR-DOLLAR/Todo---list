@@ -102,7 +102,7 @@ export default function Diagnose() {
           </div>
 
           <label>
-            Crop <span className="muted">(optional – improves accuracy)</span>
+            Crop <span className="muted">(recommended – noticeably improves accuracy)</span>
             <select value={crop} onChange={(e) => setCrop(e.target.value)}>
               <option value="">Auto-detect</option>
               {crops.map((c) => (
@@ -142,12 +142,19 @@ export default function Diagnose() {
       <aside className="card tips">
         <h3>Tips for an accurate diagnosis</h3>
         <ol>
-          <li>Photograph one leaf at a time, filling most of the frame.</li>
-          <li>Use natural daylight; avoid harsh shadows and flash glare.</li>
-          <li>Place the leaf on a plain background if possible.</li>
+          <li>Photograph <strong>one leaf</strong> up close so it fills most of the frame.</li>
+          <li>Use natural daylight; avoid harsh shadows and flash glare. Keep the photo sharp.</li>
           <li>Capture the side with the clearest symptoms (spots, powder, discolouration).</li>
-          <li>Select the crop if you know it – it narrows down the possibilities.</li>
+          <li>Select the crop – it rules out diseases of other plants.</li>
         </ol>
+        {crops.length > 0 && (
+          <>
+            <h3>Supported crops</h3>
+            <p className="small muted">
+              {crops.join(', ')}. Other plants can't be diagnosed – the app will say it isn't sure.
+            </p>
+          </>
+        )}
       </aside>
     </div>
   );

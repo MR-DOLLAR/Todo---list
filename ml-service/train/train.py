@@ -1,29 +1,44 @@
-"""Train a leaf disease classifier on PlantVillage (or any ImageFolder dataset)
-with transfer learning, then export it to ONNX for the Flask service.
+"""Train a leaf disease classifier with transfer learning and export it to ONNX
+for the Flask service.
 
-Dataset layout (one folder per class, e.g. the PlantVillage "color" split):
-    data_dir/
-        Apple___Apple_scab/*.jpg
-        Apple___healthy/*.jpg
-        ...
+Real-world accuracy needs real-world photos: train on PlantDoc (field photos)
+together with PlantVillage (lab photos), selecting the best epoch on held-out
+PlantDoc images. `train/prepare_data.py` builds that layout:
 
-Usage:
-    pip install -r train/requirements.txt
-    python train/train.py --data-dir /path/to/plantvillage --epochs 5
+    python train/prepare_data.py --plantdoc PlantDoc-Dataset --plantvillage plantvillage/color --out data
+    python train/train.py \\
+        --train-dir data/train_pd:2 --train-dir data/train_pv:1:bg \\
+        --val-dir data/val_pd --test-dir data/test_pd \\
+        --arch timm:efficientnet_b2 --epochs 10
+
+`--train-dir PATH[:WEIGHT][:bg]` may be repeated. WEIGHT sets how often images
+from that folder are sampled relative to the others; `bg` pastes the leaf onto
+random backgrounds (for lab photos shot on plain backgrounds), which teaches the
+model to ignore the background. Each folder has one sub-folder per class
+(PlantVillage class names).
+
+The older single-folder form still works: `--data-dir DIR` (20 % held out).
 Outputs models/leaf_model.onnx and models/labels.json.
 """
 import argparse
 import json
+import math
 import os
+import random
 import time
 
+import numpy as np
 import torch
+from PIL import Image, ImageFilter, ImageOps
 from torch import nn
-from torch.utils.data import DataLoader, random_split
-from torchvision import datasets, models, transforms
+from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
+from torchvision import models, transforms
 
 IMAGE_SIZE = 224
 MEAN, STD = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
+IMAGE_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
+# Predictions at or above the threshold should be right at least this often.
+TARGET_PRECISION = 0.85
 
 
 def build_model(arch, num_classes, weights_path=None):
@@ -71,51 +86,200 @@ def _torchvision_model(arch, num_classes, pretrained=True):
     return model
 
 
-def loaders(data_dir, batch_size, val_split, workers):
-    train_tf = transforms.Compose([
-        transforms.RandomResizedCrop(IMAGE_SIZE, scale=(0.7, 1.0)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomVerticalFlip(),
-        transforms.RandomRotation(20),
-        transforms.ColorJitter(0.3, 0.3, 0.3, 0.05),
-        transforms.ToTensor(),
-        transforms.Normalize(MEAN, STD),
-    ])
-    val_tf = transforms.Compose([
-        transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
-        transforms.ToTensor(),
-        transforms.Normalize(MEAN, STD),
-    ])
-    base = datasets.ImageFolder(data_dir)
-    n_val = int(len(base) * val_split)
-    gen = torch.Generator().manual_seed(42)
-    train_idx, val_idx = random_split(range(len(base)), [len(base) - n_val, n_val], generator=gen)
-    train_ds = torch.utils.data.Subset(datasets.ImageFolder(data_dir, train_tf), train_idx.indices)
-    val_ds = torch.utils.data.Subset(datasets.ImageFolder(data_dir, val_tf), val_idx.indices)
-    return (
-        DataLoader(train_ds, batch_size, shuffle=True, num_workers=workers, pin_memory=True),
-        DataLoader(val_ds, batch_size, shuffle=False, num_workers=workers, pin_memory=True),
-        base.classes,
-    )
+# --------------------------------------------------------------------------- data
+
+def scan(folder):
+    """[(path, class_name)] for an ImageFolder-style directory."""
+    items = []
+    for cls in sorted(os.listdir(folder)):
+        d = os.path.join(folder, cls)
+        if os.path.isdir(d):
+            items += [(os.path.join(d, f), cls) for f in sorted(os.listdir(d)) if f.lower().endswith(IMAGE_EXT)]
+    return items
 
 
-def run_epoch(model, loader, criterion, device, optimizer=None):
-    training = optimizer is not None
-    model.train(training)
-    total, correct, loss_sum = 0, 0, 0.0
-    with torch.set_grad_enabled(training):
-        for x, y in loader:
-            x, y = x.to(device), y.to(device)
-            out = model(x)
-            loss = criterion(out, y)
-            if training:
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-            loss_sum += loss.item() * x.size(0)
-            correct += (out.argmax(1) == y).sum().item()
-            total += x.size(0)
+def load_rgb(path):
+    with Image.open(path) as im:
+        return ImageOps.exif_transpose(im).convert("RGB")
+
+
+def leaf_mask(im):
+    """Leaf vs the plain lab background.
+
+    The background colour is estimated from the image border; pixels whose
+    colour (chromaticity) differs from it, or that are strongly saturated, are
+    leaf. Shadows are darker but keep the background's chromaticity, so they
+    stay background. Holes enclosed by the leaf (shine, dark lesions) are filled.
+    """
+    from PIL import ImageDraw
+
+    rgb = np.asarray(im, dtype=np.float32)
+    border = np.concatenate([rgb[:6].reshape(-1, 3), rgb[-6:].reshape(-1, 3),
+                             rgb[:, :6].reshape(-1, 3), rgb[:, -6:].reshape(-1, 3)])
+    bg = np.median(border, axis=0)
+    chroma = rgb / (rgb.sum(-1, keepdims=True) + 1e-3)
+    bg_chroma = bg / (bg.sum() + 1e-3)
+    sat = np.asarray(im.convert("HSV"), dtype=np.uint8)[..., 1]
+    leaf = (np.linalg.norm(chroma - bg_chroma, axis=-1) > 0.045) | (sat > 90)
+    mask = Image.fromarray(leaf.astype(np.uint8) * 255)
+    mask = mask.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.MaxFilter(3))  # drop speckles
+    mask = mask.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.MinFilter(5))  # close thin gaps
+    # Fill holes: flood the background from the border; whatever isn't reached is leaf.
+    w, h = mask.size
+    for xy in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1), (w // 2, 0), (w // 2, h - 1), (0, h // 2), (w - 1, h // 2)]:
+        if mask.getpixel(xy) == 0:
+            ImageDraw.floodfill(mask, xy, 128)
+    filled = Image.fromarray(((np.asarray(mask) != 128) * 255).astype(np.uint8))
+    return filled.filter(ImageFilter.GaussianBlur(1.2))
+
+
+def random_background(size, pool, rng):
+    w, h = size
+    kind = rng.random()
+    if kind < 0.45 and pool:
+        # A real photo blurred beyond recognition: realistic colours, no leaf shapes.
+        # Blurring at quarter size looks the same and is much cheaper.
+        small = load_rgb(rng.choice(pool)).resize((max(1, w // 4), max(1, h // 4)))
+        return small.filter(ImageFilter.GaussianBlur(rng.uniform(1.5, 3.5))).resize((w, h), Image.BILINEAR)
+    if kind < 0.75:
+        # Soil / foliage / mulch-like texture: one luminance noise field tinted
+        # with a natural colour (independent per-channel noise looks like confetti).
+        palette = [(110, 80, 55), (140, 110, 80), (70, 55, 40), (90, 120, 60), (60, 90, 45),
+                   (150, 140, 120), (190, 180, 160), (120, 130, 140)]
+        base = np.array(rng.choice(palette), dtype=np.float32) * rng.uniform(0.7, 1.3)
+        gen = np.random.default_rng(rng.randrange(1 << 30))
+        cell = rng.choice([4, 8, 16])
+        lum = gen.normal(0, rng.uniform(0.1, 0.35), (h // cell + 1, w // cell + 1, 1))
+        tint = gen.normal(0, 6, (h // cell + 1, w // cell + 1, 3))
+        tex = np.clip(base * (1 + lum) + tint, 0, 255).astype(np.uint8)
+        tex = Image.fromarray(tex).resize((w, h), Image.BICUBIC)
+        return tex.filter(ImageFilter.GaussianBlur(rng.uniform(0.5, 2.5)))
+    # Smooth two-colour gradient (table, wall, sky, hand-held paper...).
+    a, b = np.array([rng.uniform(30, 240) for _ in range(3)]), np.array([rng.uniform(30, 240) for _ in range(3)])
+    t = np.linspace(0, 1, h)[:, None, None]
+    return Image.fromarray(np.broadcast_to(a * (1 - t) + b * t, (h, w, 3)).astype(np.uint8))
+
+
+def replace_background(im, pool, rng, mask=None):
+    mask = mask if mask is not None else leaf_mask(im)
+    scale = rng.uniform(0.55, 1.0)  # leaf may fill only part of the new photo
+    w, h = im.size
+    canvas = random_background((w, h), pool, rng)
+    lw, lh = max(1, int(w * scale)), max(1, int(h * scale))
+    x, y = rng.randint(0, w - lw), rng.randint(0, h - lh)
+    canvas.paste(im.resize((lw, lh)), (x, y), mask.resize((lw, lh)))
+    return canvas
+
+
+class MixedDataset(Dataset):
+    def __init__(self, sources, class_to_idx, transform, bg_pool=(), seed=0):
+        self.items, self.weights = [], []
+        for folder, weight, bg in sources:
+            found = scan(folder)
+            per_item = weight / max(1, len(found))
+            self.items += [(p, class_to_idx[c], bg) for p, c in found]
+            self.weights += [per_item] * len(found)
+        self.transform, self.bg_pool = transform, list(bg_pool)
+        self.rng = random.Random(seed)
+        self.masks = {}  # per-worker cache of lab-photo leaf masks
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, i):
+        path, label, bg = self.items[i]
+        im = load_rgb(path)
+        if bg and self.rng.random() < 0.6:
+            if path not in self.masks:
+                self.masks[path] = leaf_mask(im).resize((128, 128))
+            im = replace_background(im, self.bg_pool, self.rng, self.masks[path].resize(im.size, Image.BILINEAR))
+        return self.transform(im), label
+
+
+def worker_init(worker_id):
+    torch.set_num_threads(1)  # the training process already uses every core
+    info = torch.utils.data.get_worker_info()
+    info.dataset.rng = random.Random(torch.initial_seed() % (1 << 31) + worker_id)
+
+
+TRAIN_TF = transforms.Compose([
+    transforms.RandomResizedCrop(IMAGE_SIZE, scale=(0.3, 1.0), ratio=(0.75, 1.333)),
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomVerticalFlip(),
+    transforms.RandomRotation(25),
+    transforms.ColorJitter(0.4, 0.4, 0.35, 0.04),
+    transforms.RandomApply([transforms.GaussianBlur(5, sigma=(0.1, 2.0))], p=0.25),
+    transforms.ToTensor(),
+    transforms.Normalize(MEAN, STD),
+    transforms.RandomErasing(p=0.2, scale=(0.02, 0.12)),
+])
+# Matches the service's preprocessing (whole image squashed to 224×224).
+EVAL_TF = transforms.Compose([
+    transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
+    transforms.ToTensor(),
+    transforms.Normalize(MEAN, STD),
+])
+
+
+# ------------------------------------------------------------------ train / eval
+
+def train_epoch(model, loader, criterion, optimizer, scheduler, device):
+    model.train()
+    total = correct = 0
+    loss_sum = 0.0
+    for x, y in loader:
+        x, y = x.to(device), y.to(device)
+        out = model(x)
+        loss = criterion(out, y)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        scheduler.step()
+        loss_sum += loss.item() * x.size(0)
+        correct += (out.argmax(1) == y).sum().item()
+        total += x.size(0)
     return loss_sum / total, correct / total
+
+
+@torch.no_grad()
+def predict_probs(model, folder, class_to_idx, device, batch_size=64):
+    """Softmax probabilities averaged over the image and its mirror image
+    (the same test-time augmentation the service uses)."""
+    model.eval()
+    items = [(p, class_to_idx[c]) for p, c in scan(folder) if c in class_to_idx]
+    probs, labels = [], []
+    for i in range(0, len(items), batch_size):
+        chunk = items[i:i + batch_size]
+        x = torch.stack([EVAL_TF(load_rgb(p)) for p, _ in chunk]).to(device)
+        logits = model(x).softmax(1) + model(torch.flip(x, dims=[3])).softmax(1)
+        probs.append((logits / 2).cpu())
+        labels += [y for _, y in chunk]
+    return torch.cat(probs), torch.tensor(labels)
+
+
+def metrics(probs, labels):
+    top3 = probs.topk(3, dim=1).indices
+    return {
+        "top1": round((top3[:, 0] == labels).float().mean().item(), 4),
+        "top3": round((top3 == labels[:, None]).any(1).float().mean().item(), 4),
+        "n": len(labels),
+    }
+
+
+def calibrate(probs, labels, target=TARGET_PRECISION):
+    """Lowest confidence threshold at which accepted predictions are right at
+    least `target` of the time; below it the service reports 'not sure'."""
+    conf, pred = probs.max(1)
+    correct = (pred == labels).float()
+    table = []
+    for t in [i / 20 for i in range(1, 20)]:
+        keep = conf >= t
+        if keep.sum() == 0:
+            break
+        table.append({"threshold": t, "coverage": round(keep.float().mean().item(), 3),
+                      "precision": round(correct[keep].mean().item(), 3)})
+    chosen = next((r["threshold"] for r in table if r["precision"] >= target), 0.5)
+    return chosen, table
 
 
 def export_onnx(model, out_dir):
@@ -136,50 +300,112 @@ def export_onnx(model, out_dir):
     return onnx_path
 
 
+def parse_source(spec):
+    parts = spec.split(":")
+    # Windows drive letters ("C:\\data") contain a colon; rejoin them.
+    if len(parts) > 1 and len(parts[0]) == 1 and parts[1].startswith(("\\", "/")):
+        parts = [parts[0] + ":" + parts[1]] + parts[2:]
+    folder = parts[0]
+    weight = float(parts[1]) if len(parts) > 1 and parts[1] else 1.0
+    return folder, weight, "bg" in parts[2:]
+
+
+def split_single_dir(data_dir, out_root, val_split):
+    """Back-compat for --data-dir: hold out val_split of each class via symlinks/copies."""
+    import shutil
+
+    rng = random.Random(42)
+    for split in ("train", "val"):
+        shutil.rmtree(os.path.join(out_root, split), ignore_errors=True)
+    for path, cls in scan(data_dir):
+        split = "val" if rng.random() < val_split else "train"
+        d = os.path.join(out_root, split, cls)
+        os.makedirs(d, exist_ok=True)
+        shutil.copy(path, d)
+    return os.path.join(out_root, "train"), os.path.join(out_root, "val")
+
+
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--data-dir", required=True)
+    p.add_argument("--train-dir", action="append", default=[], help="PATH[:WEIGHT][:bg], repeatable")
+    p.add_argument("--val-dir", action="append", default=[], help="selects the best epoch (first one) + calibration")
+    p.add_argument("--test-dir", action="append", default=[], help="reported only, never used for selection")
+    p.add_argument("--data-dir", help="single ImageFolder dir (older form); 20%% is held out for validation")
     p.add_argument("--out-dir", default=os.path.join(os.path.dirname(__file__), "..", "models"))
-    p.add_argument("--arch", default="mobilenet_v3",
-                   help="mobilenet_v3 | efficientnet_b0 | resnet50 | timm:<model_name>")
+    p.add_argument("--arch", default="mobilenet_v3", help="mobilenet_v3 | efficientnet_b0 | resnet50 | timm:<model_name>")
     p.add_argument("--weights", help="Local pretrained weights file (skips downloading)")
-    p.add_argument("--epochs", type=int, default=5)
+    p.add_argument("--epochs", type=int, default=8)
+    p.add_argument("--epoch-size", type=int, default=0, help="images sampled per epoch (default: all)")
     p.add_argument("--batch-size", type=int, default=32)
-    p.add_argument("--lr", type=float, default=1e-3)
+    p.add_argument("--lr", type=float, default=5e-4)
     p.add_argument("--val-split", type=float, default=0.2)
     p.add_argument("--workers", type=int, default=4)
     args = p.parse_args()
 
+    os.makedirs(args.out_dir, exist_ok=True)
+    if args.data_dir:
+        tr, va = split_single_dir(args.data_dir, os.path.join(args.out_dir, "_split"), args.val_split)
+        args.train_dir, args.val_dir = [tr], [va]
+    if not args.train_dir or not args.val_dir:
+        p.error("give --train-dir and --val-dir (or --data-dir)")
+
+    sources = [parse_source(s) for s in args.train_dir]
+    classes = sorted({c for folder, _, _ in sources for _, c in scan(folder)})
+    class_to_idx = {c: i for i, c in enumerate(classes)}
+    bg_pool = [path for folder, _, bg in sources if not bg for path, _ in scan(folder)]
+    train_ds = MixedDataset(sources, class_to_idx, TRAIN_TF, bg_pool)
+    epoch_size = args.epoch_size or len(train_ds)
+    sampler = WeightedRandomSampler(train_ds.weights, epoch_size, replacement=True)
+    train_dl = DataLoader(train_ds, args.batch_size, sampler=sampler, num_workers=args.workers,
+                          worker_init_fn=worker_init, persistent_workers=args.workers > 0, drop_last=True)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-    train_dl, val_dl, classes = loaders(args.data_dir, args.batch_size, args.val_split, args.workers)
-    print(f"{len(classes)} classes, {len(train_dl.dataset)} train / {len(val_dl.dataset)} val images on {device}")
+    print(f"{len(classes)} classes; {len(train_ds)} training images, {epoch_size} sampled per epoch; device {device}")
+    for folder, weight, bg in sources:
+        print(f"  {folder}  weight={weight}{'  background-replacement' if bg else ''}")
 
     model = build_model(args.arch, len(classes), args.weights).to(device)
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.05)
+    steps = args.epochs * (epoch_size // args.batch_size)
+    warmup = max(1, steps // 20)
+    scheduler = torch.optim.lr_scheduler.LambdaLR(
+        optimizer, lambda s: min(1.0, (s + 1) / warmup) * 0.5 * (1 + math.cos(math.pi * min(1.0, s / steps))))
 
-    os.makedirs(args.out_dir, exist_ok=True)
     ckpt = os.path.join(args.out_dir, "best.pt")
-    best_acc = 0.0
+    best, history = -1.0, []
     for epoch in range(1, args.epochs + 1):
         t0 = time.time()
-        tr_loss, tr_acc = run_epoch(model, train_dl, criterion, device, optimizer)
-        va_loss, va_acc = run_epoch(model, val_dl, criterion, device)
-        scheduler.step()
+        tr_loss, tr_acc = train_epoch(model, train_dl, criterion, optimizer, scheduler, device)
+        val = {os.path.basename(os.path.normpath(d)): metrics(*predict_probs(model, d, class_to_idx, device))
+               for d in args.val_dir}
+        score = next(iter(val.values()))["top1"]
+        history.append({"epoch": epoch, "train_acc": round(tr_acc, 4), **val})
         print(f"epoch {epoch}/{args.epochs}  train {tr_loss:.3f}/{tr_acc:.3f}  "
-              f"val {va_loss:.3f}/{va_acc:.3f}  ({time.time() - t0:.0f}s)")
-        if va_acc > best_acc:
-            best_acc = va_acc
+              + "  ".join(f"{k} top1 {v['top1']:.3f} top3 {v['top3']:.3f}" for k, v in val.items())
+              + f"  ({time.time() - t0:.0f}s)", flush=True)
+        if score > best:
+            best = score
             torch.save(model.state_dict(), ckpt)
 
     model.load_state_dict(torch.load(ckpt, map_location=device))
+    threshold, table = calibrate(*predict_probs(model, args.val_dir[0], class_to_idx, device))
+    report = {name: metrics(*predict_probs(model, d, class_to_idx, device))
+              for name, d in [(os.path.basename(os.path.normpath(d)), d) for d in args.val_dir + args.test_dir]}
+    for name, m in report.items():
+        print(f"best model on {name}: top1 {m['top1']:.3f}  top3 {m['top3']:.3f}  (n={m['n']})")
+    print(f"confidence threshold {threshold} (≥{TARGET_PRECISION:.0%} precision on {args.val_dir[0]})")
+
     model.eval().cpu()
     onnx_path = export_onnx(model, args.out_dir)
     with open(os.path.join(args.out_dir, "labels.json"), "w", encoding="utf-8") as f:
-        json.dump({"labels": classes, "image_size": IMAGE_SIZE, "arch": args.arch,
-                   "val_accuracy": round(best_acc, 4)}, f, indent=2)
-    print(f"Best val accuracy {best_acc:.4f}. Exported {onnx_path}")
+        json.dump({
+            "labels": classes, "image_size": IMAGE_SIZE, "arch": args.arch,
+            "confidence_threshold": threshold, "calibration": table,
+            "metrics": report, "history": history,
+            "train_dirs": [f"{os.path.basename(os.path.normpath(d))}:{w}{':bg' if bg else ''}" for d, w, bg in sources],
+        }, f, indent=2)
+    print(f"Exported {onnx_path}")
 
 
 if __name__ == "__main__":

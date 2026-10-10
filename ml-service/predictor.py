@@ -32,6 +32,8 @@ def _top_k(labels, probs, k):
 
 class OnnxPredictor:
     mode = "model"
+    # Used when labels.json has no calibrated value.
+    DEFAULT_THRESHOLD = 0.5
 
     def __init__(self, model_path, labels_path):
         import onnxruntime as ort
@@ -40,17 +42,32 @@ class OnnxPredictor:
         self.input_name = self.session.get_inputs()[0].name
         with open(labels_path, encoding="utf-8") as f:
             meta = json.load(f)
-        self.labels = meta["labels"] if isinstance(meta, dict) else meta
-        self.image_size = meta.get("image_size", 224) if isinstance(meta, dict) else 224
+        meta = meta if isinstance(meta, dict) else {"labels": meta}
+        self.labels = meta["labels"]
+        self.image_size = meta.get("image_size", 224)
+        # Below this confidence a prediction is reported as "not sure"; calibrated
+        # on held-out real-world photos by train/train.py.
+        self.threshold = float(meta.get("confidence_threshold", self.DEFAULT_THRESHOLD))
+        # Older exported models have a fixed batch size of 1.
+        batch_dim = self.session.get_inputs()[0].shape[0]
+        self.batched = not isinstance(batch_dim, int) or batch_dim != 1
 
     def _preprocess(self, image):
         img = image.convert("RGB").resize((self.image_size, self.image_size), Image.BILINEAR)
         arr = (np.asarray(img, dtype=np.float32) / 255.0 - IMAGENET_MEAN) / IMAGENET_STD
-        return arr.transpose(2, 0, 1)[None, ...].astype(np.float32)
+        return arr.transpose(2, 0, 1).astype(np.float32)
 
     def predict(self, image, crop=None, top_k=3):
-        logits = self.session.run(None, {self.input_name: self._preprocess(image)})[0][0]
-        probs = _softmax(logits.astype(np.float64))
+        x = self._preprocess(image)
+        # Test-time augmentation: average over the image and its mirror image,
+        # which makes predictions steadier on real photos.
+        views = np.stack([x, x[:, :, ::-1]])
+        if self.batched:
+            logits = self.session.run(None, {self.input_name: np.ascontiguousarray(views)})[0]
+        else:
+            logits = np.concatenate([self.session.run(None, {self.input_name: np.ascontiguousarray(v[None])})[0]
+                                     for v in views])
+        probs = np.mean([_softmax(l.astype(np.float64)) for l in logits], axis=0)
         if crop:
             # Restrict to the user-selected crop when it is known to the model.
             mask = np.array([_crop_key(l) == crop.lower() for l in self.labels])
@@ -63,6 +80,7 @@ class OnnxPredictor:
 class HeuristicPredictor:
     mode = "heuristic"
     fallback_reason = None
+    threshold = 0.0  # demo mode already shows its own banner
     labels = [
         "Generic___healthy",
         "Generic___Leaf_spot_or_blight",

@@ -65,12 +65,19 @@ export default function History() {
               </Link>
               <div className="grow">
                 <Link to={`/result/${r.id}`}>
-                  <strong>{r.prediction.healthy ? 'Healthy' : r.prediction.disease}</strong>
+                  <strong>
+                    {r.status === 'no_leaf'
+                      ? 'No leaf found'
+                      : r.status === 'uncertain'
+                        ? `Possibly ${r.prediction.healthy ? 'healthy' : r.prediction.disease}`
+                        : r.prediction.healthy ? 'Healthy' : r.prediction.disease}
+                  </strong>
                 </Link>
                 <div className="muted small">
                   {r.prediction.crop} · {pct(r.prediction.confidence)} · {new Date(r.createdAt).toLocaleDateString()}
                 </div>
                 <div className="row wrap">
+                  {r.status === 'uncertain' && <Badge color="var(--warn)">not sure</Badge>}
                   <Badge color={SEVERITY_COLOR[r.severity.level]}>{r.severity.level}</Badge>
                   <Badge color={URGENCY_COLOR[r.urgency]}>{r.urgency}</Badge>
                 </div>

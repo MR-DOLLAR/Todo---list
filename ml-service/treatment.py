@@ -14,8 +14,12 @@ def is_curable(disease):
     return disease["type"] not in INCURABLE_TYPES and disease["id"] not in INCURABLE_IDS
 
 
-def build_plan(disease, severity, confidence, preference="integrated"):
-    """preference: 'organic', 'chemical' or 'integrated' (default)."""
+def build_plan(disease, severity, confidence, preference="integrated", uncertain=False):
+    """preference: 'organic', 'chemical' or 'integrated' (default).
+
+    uncertain: the diagnosis is below the model's confidence threshold, so the
+    plan sticks to safe, non-chemical steps until the diagnosis is confirmed.
+    """
     level = severity["level"]
 
     if disease["healthy"]:
@@ -23,10 +27,12 @@ def build_plan(disease, severity, confidence, preference="integrated"):
             "urgency": "low",
             "curable": True,
             "approach": "preventive",
-            "summary": "No disease detected. Keep up good growing practices.",
+            "summary": ("Probably healthy, but the model isn't sure. Look closely for spots, powder or "
+                        "discolouration and retake the photo if you see any."
+                        if uncertain else "No disease detected. Keep up good growing practices."),
             "steps": [{"phase": "Ongoing", "actions": disease["prevention"]}],
             "prognosis": {"recovery_chance": 1.0, "estimated_recovery_days": 0},
-            "warnings": _warnings(confidence),
+            "warnings": _warnings(confidence, uncertain=uncertain),
         }
 
     curable = is_curable(disease)
@@ -38,7 +44,24 @@ def build_plan(disease, severity, confidence, preference="integrated"):
         urgency_idx = max(urgency_idx, 2)
     urgency = URGENCY[min(urgency_idx, 3)]
 
-    if not curable:
+    if not curable and uncertain:
+        # Never tell someone to destroy plants on an unconfirmed diagnosis.
+        approach = "confirm first"
+        steps = [
+            {"phase": "Today", "actions": [
+                "Keep the plant apart from healthy plants and wash your hands and tools after handling it",
+                "Confirm the diagnosis before removing plants: retake a clear close-up photo, or ask a "
+                "local agricultural extension service or plant clinic",
+            ]},
+            {"phase": "Days 1-14", "actions": _dedupe(
+                [a for a in t["organic"] if "remove" not in a.lower() and "destroy" not in a.lower()]
+                + t["cultural"])},
+            {"phase": "Ongoing", "actions": disease["prevention"]},
+        ]
+        summary = (f"Possibly {disease['name']} — not confirmed. This disease can't be cured, so confirm "
+                   "the diagnosis before removing any plants.")
+        prognosis = {"recovery_chance": None, "estimated_recovery_days": None}
+    elif not curable:
         approach = "containment"
         immediate = ["Isolate the plant and avoid touching healthy plants after handling it"]
         immediate += [a for a in t["organic"] + t["chemical"] if "remove" in a.lower() or "destroy" in a.lower()]
@@ -52,7 +75,8 @@ def build_plan(disease, severity, confidence, preference="integrated"):
                    "Focus on removing infected plants and stopping the spread to healthy ones.")
         prognosis = {"recovery_chance": 0.0, "estimated_recovery_days": None}
     else:
-        approach = _choose_approach(level, preference)
+        # Unconfirmed diagnoses get non-chemical treatment only.
+        approach = "organic" if uncertain else _choose_approach(level, preference)
         primary = _primary_treatments(t, approach)
         steps = [
             {"phase": "Today", "actions": _dedupe(_immediate_actions(level) + primary[:1])},
@@ -71,6 +95,9 @@ def build_plan(disease, severity, confidence, preference="integrated"):
             "estimated_recovery_days": round(base_days * SEVERITY_MULTIPLIER.get(level, 1.0)),
         }
         summary = _summary(disease, level, approach)
+        if uncertain:
+            summary = (f"Possibly {disease['name']} — not confirmed. Until the diagnosis is confirmed, "
+                       "use only the non-chemical steps below.")
 
     return {
         "urgency": urgency,
@@ -79,7 +106,7 @@ def build_plan(disease, severity, confidence, preference="integrated"):
         "summary": summary,
         "steps": [s for s in steps if s["actions"]],
         "prognosis": prognosis,
-        "warnings": _warnings(confidence, approach),
+        "warnings": _warnings(confidence, approach, uncertain),
     }
 
 
@@ -116,11 +143,12 @@ def _summary(disease, level, approach):
     return f"{disease['name']}{where} detected. {tone} Recommended: {method} treatment."
 
 
-def _warnings(confidence, approach=None):
+def _warnings(confidence, approach=None, uncertain=False):
     warnings = []
-    if confidence < 0.6:
-        warnings.append("Low prediction confidence. Take a clearer photo of a single leaf in good light, "
-                        "or confirm with a local agricultural extension service.")
+    if uncertain:
+        warnings.append(f"The model is not sure about this diagnosis ({confidence:.0%} confidence). Take a "
+                        "close-up of a single leaf in daylight, select the crop, or confirm with a local "
+                        "agricultural extension service before treating.")
     if approach in ("chemical", "integrated"):
         warnings.append("Always follow the product label, wear protective equipment and observe "
                         "pre-harvest intervals. Check which products are approved in your region.")

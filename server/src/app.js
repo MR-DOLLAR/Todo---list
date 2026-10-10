@@ -99,6 +99,7 @@ export function createApp({ mlUrl, dataDir, clientDist, logger = true }) {
     const items = (await store.list()).slice(0, limit).map(({ result, ...r }) => ({
       ...r,
       prediction: result.prediction,
+      status: result.status || 'confident',
       severity: result.severity,
       urgency: result.treatment_plan.urgency,
     }));

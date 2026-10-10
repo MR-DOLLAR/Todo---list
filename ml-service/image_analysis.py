@@ -9,6 +9,8 @@ import numpy as np
 from PIL import Image
 
 ANALYSIS_SIZE = 256
+# Below this Laplacian variance (at ANALYSIS_SIZE) a photo is noticeably blurry.
+BLUR_THRESHOLD = 12.0
 
 
 @dataclass
@@ -21,19 +23,17 @@ class LeafAnalysis:
     orange: float
     white: float
     lesion_fraction: float    # everything on the leaf that is not healthy green
+    sharpness: float = 0.0    # Laplacian variance; low = blurry photo
 
     def to_dict(self):
-        return {k: round(v, 4) for k, v in asdict(self).items()}
-
-
-def _hsv(image):
-    arr = np.asarray(image.convert("RGB").resize((ANALYSIS_SIZE, ANALYSIS_SIZE)).convert("HSV"), dtype=np.float32)
-    h = arr[..., 0] * (360.0 / 255.0)
-    return h, arr[..., 1], arr[..., 2]
+        return {k: (round(v, 4) if isinstance(v, float) else v) for k, v in asdict(self).items()}
 
 
 def analyze_leaf(image: Image.Image) -> LeafAnalysis:
-    h, s, v = _hsv(image)
+    small = image.convert("RGB").resize((ANALYSIS_SIZE, ANALYSIS_SIZE))
+    hsv = np.asarray(small.convert("HSV"), dtype=np.float32)
+    h, s, v = hsv[..., 0] * (360.0 / 255.0), hsv[..., 1], hsv[..., 2]
+    rgb = np.asarray(small, dtype=np.float32)
 
     green = (h >= 65) & (h <= 170) & (s > 45) & (v > 40)
     yellow = (h >= 40) & (h < 65) & (s > 60) & (v > 110)
@@ -54,6 +54,16 @@ def analyze_leaf(image: Image.Image) -> LeafAnalysis:
     white &= _dilate(plant, 3)
     dark &= _dilate(plant, 3)
 
+    # In field photos soil, mulch and dead material are brown too, so only count
+    # discoloured pixels near healthy green tissue (lesions sit on leaves). When
+    # almost no green is left (a mostly dead leaf) there is nothing to anchor to,
+    # so everything counts.
+    if green.sum() >= 0.1 * max(1, plant.sum()):
+        near_green = _dilate(green, 24)
+        yellow, orange, brown = yellow & near_green, orange & near_green, brown & near_green
+        dark, white = dark & near_green, white & near_green
+        plant = green | yellow | orange | brown
+
     leaf = plant | dark | white
     leaf_px = max(int(leaf.sum()), 1)
 
@@ -70,15 +80,36 @@ def analyze_leaf(image: Image.Image) -> LeafAnalysis:
         orange=frac(orange),
         white=frac(white),
         lesion_fraction=frac(lesion),
+        sharpness=_sharpness(rgb),
     )
 
 
 def _dilate(mask, radius):
-    out = mask.copy()
-    for dy in range(-radius, radius + 1):
-        for dx in range(-radius, radius + 1):
-            out |= np.roll(np.roll(mask, dy, axis=0), dx, axis=1)
-    return out
+    """Square dilation via an integral image: O(pixels) for any radius."""
+    k = 2 * radius + 1
+    padded = np.pad(mask.astype(np.int32), radius)
+    ii = np.pad(padded.cumsum(0).cumsum(1), ((1, 0), (1, 0)))
+    box = ii[k:, k:] - ii[:-k, k:] - ii[k:, :-k] + ii[:-k, :-k]
+    return box > 0
+
+
+def _sharpness(rgb):
+    """Variance of the Laplacian of the grey image: a standard focus measure."""
+    g = rgb.mean(axis=-1)
+    lap = 4 * g[1:-1, 1:-1] - g[:-2, 1:-1] - g[2:, 1:-1] - g[1:-1, :-2] - g[1:-1, 2:]
+    return float(lap.var())
+
+
+def photo_warnings(image: Image.Image, analysis: LeafAnalysis):
+    """Plain-language hints about photo problems that hurt accuracy."""
+    warnings = []
+    if min(image.size) < 160:
+        warnings.append("The photo is very small. Use a larger, closer photo of the leaf.")
+    if analysis.sharpness < BLUR_THRESHOLD:
+        warnings.append("The photo looks blurry. Hold the camera steady and tap the leaf to focus.")
+    if analysis.leaf_fraction < 0.15:
+        warnings.append("The leaf fills only a small part of the photo. Move closer so one leaf fills most of the frame.")
+    return warnings
 
 
 def severity_from_analysis(analysis: LeafAnalysis, healthy: bool):
