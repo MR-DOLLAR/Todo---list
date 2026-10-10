@@ -14,13 +14,14 @@ const fakeResult = {
 };
 
 let mlServer, apiServer, base, dataDir;
+let nextStatus; // status the fake ML service puts in its next /predict response
 
 before(async () => {
   mlServer = http.createServer((req, res) => {
     res.setHeader('Content-Type', 'application/json');
     if (req.url === '/predict') {
       req.resume();
-      req.on('end', () => res.end(JSON.stringify(fakeResult)));
+      req.on('end', () => res.end(JSON.stringify(nextStatus ? { ...fakeResult, status: nextStatus } : fakeResult)));
     } else if (req.url === '/health') res.end(JSON.stringify({ status: 'ok', mode: 'heuristic' }));
     else if (req.url.startsWith('/diseases')) res.end(JSON.stringify([{ id: 'x' }]));
     else res.writeHead(404).end('{}');
@@ -108,4 +109,20 @@ test('explains an unbuilt client, then serves the build without a restart', asyn
     server.close();
     fs.rmSync(dist, { recursive: true, force: true });
   }
+});
+
+test('stats count only confident diagnoses; unsure and no-leaf photos are separate', async () => {
+  const before = await (await fetch(`${base}/stats`)).json();
+  for (const status of ['confident', 'uncertain', 'no_leaf']) {
+    nextStatus = status;
+    assert.equal((await fetch(`${base}/diagnose`, { method: 'POST', body: imageForm() })).status, 201);
+  }
+  nextStatus = undefined;
+  const after = await (await fetch(`${base}/stats`)).json();
+  assert.equal(after.total - before.total, 3);
+  assert.equal(after.diseased - before.diseased, 1);
+  assert.equal(after.uncertain - (before.uncertain || 0), 1);
+  assert.equal(after.noLeaf - (before.noLeaf || 0), 1);
+  const history = await (await fetch(`${base}/history`)).json();
+  assert.deepEqual(history.slice(0, 3).map((h) => h.status).sort(), ['confident', 'no_leaf', 'uncertain']);
 });

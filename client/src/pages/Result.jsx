@@ -43,6 +43,7 @@ export default function Result() {
     ? 'var(--good)'
     : prediction.confidence >= threshold ? 'var(--warn)' : 'var(--bad)';
   const photoTips = record.result.photo_warnings || [];
+  const showSeverity = severity.measurable !== false;
   const title = prediction.healthy
     ? uncertain ? 'Probably healthy' : '✅ Healthy leaf'
     : uncertain ? `Possibly ${prediction.disease}` : prediction.disease;
@@ -100,8 +101,10 @@ export default function Result() {
 
           <div className="row wrap">
             {!prediction.healthy && <Badge color="var(--accent)">{disease.type}</Badge>}
-            <Badge color={SEVERITY_COLOR[severity.level]}>severity: {severity.level}</Badge>
-            <Badge color={URGENCY_COLOR[plan.urgency]}>urgency: {plan.urgency}</Badge>
+            {!uncertain && showSeverity && (
+              <Badge color={SEVERITY_COLOR[severity.level]}>severity: {severity.level}</Badge>
+            )}
+            {!uncertain && <Badge color={URGENCY_COLOR[plan.urgency]}>urgency: {plan.urgency}</Badge>}
             {!prediction.healthy && (
               <Badge color={plan.curable ? 'var(--good)' : 'var(--bad)'}>{plan.curable ? 'treatable' : 'not curable'}</Badge>
             )}
@@ -111,9 +114,9 @@ export default function Result() {
             <div className="row between small"><span>Confidence</span><strong>{pct(prediction.confidence)}</strong></div>
             <Meter value={prediction.confidence * 100} color={confColor} label="confidence" />
           </div>
-          {!prediction.healthy && (
+          {!prediction.healthy && !uncertain && showSeverity && (
             <div>
-              <div className="row between small"><span>Affected leaf area</span><strong>{severity.affected_area_pct}%</strong></div>
+              <div className="row between small"><span>Affected leaf area (estimate)</span><strong>{severity.affected_area_pct}%</strong></div>
               <Meter value={severity.affected_area_pct} color={SEVERITY_COLOR[severity.level]} label="affected area" />
             </div>
           )}
@@ -143,7 +146,7 @@ export default function Result() {
           <div key={w} className="warning">⚠️ {w}</div>
         ))}
 
-        <div className="prognosis">
+        {!uncertain && <div className="prognosis">
           <div>
             <div className="muted small">Recovery chance</div>
             <div className="big">
@@ -168,7 +171,7 @@ export default function Result() {
             <div className="muted small">Spread risk</div>
             <div className="big cap">{disease.spread_risk}</div>
           </div>
-        </div>
+        </div>}
 
         <ol className="timeline">
           {plan.steps.map((s) => (

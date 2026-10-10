@@ -38,7 +38,7 @@ IMAGE_SIZE = 224
 MEAN, STD = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 # Predictions at or above the threshold should be right at least this often.
-TARGET_PRECISION = 0.85
+TARGET_PRECISION = 0.88
 
 
 def build_model(arch, num_classes, weights_path=None):
@@ -258,10 +258,10 @@ def predict_probs(model, folder, class_to_idx, device, batch_size=64):
 
 
 def metrics(probs, labels):
-    top3 = probs.topk(3, dim=1).indices
+    top = probs.topk(min(3, probs.shape[1]), dim=1).indices
     return {
-        "top1": round((top3[:, 0] == labels).float().mean().item(), 4),
-        "top3": round((top3 == labels[:, None]).any(1).float().mean().item(), 4),
+        "top1": round((top[:, 0] == labels).float().mean().item(), 4),
+        "top3": round((top == labels[:, None]).any(1).float().mean().item(), 4),
         "n": len(labels),
     }
 
@@ -278,7 +278,11 @@ def calibrate(probs, labels, target=TARGET_PRECISION):
             break
         table.append({"threshold": t, "coverage": round(keep.float().mean().item(), 3),
                       "precision": round(correct[keep].mean().item(), 3)})
-    chosen = next((r["threshold"] for r in table if r["precision"] >= target), 0.5)
+    chosen = next((r["threshold"] for r in table if r["precision"] >= target), None)
+    if chosen is None:
+        # Never fall back to a lenient value: use the most precise threshold seen.
+        chosen = max(table, key=lambda r: (r["precision"], r["threshold"]))["threshold"] if table else 0.95
+        print(f"WARNING: no threshold reaches {target:.0%} precision; using the strictest-performing {chosen}")
     return chosen, table
 
 
@@ -301,27 +305,36 @@ def export_onnx(model, out_dir):
 
 
 def parse_source(spec):
+    """PATH[:WEIGHT][:bg] -> (path, weight, background_replacement)."""
     parts = spec.split(":")
     # Windows drive letters ("C:\\data") contain a colon; rejoin them.
     if len(parts) > 1 and len(parts[0]) == 1 and parts[1].startswith(("\\", "/")):
         parts = [parts[0] + ":" + parts[1]] + parts[2:]
-    folder = parts[0]
-    weight = float(parts[1]) if len(parts) > 1 and parts[1] else 1.0
-    return folder, weight, "bg" in parts[2:]
+    folder, flags = parts[0], [p for p in parts[1:] if p]
+    weight = 1.0
+    for f in flags:
+        try:
+            weight = float(f)
+        except ValueError:
+            pass
+    return folder, weight, "bg" in flags
 
 
 def split_single_dir(data_dir, out_root, val_split):
-    """Back-compat for --data-dir: hold out val_split of each class via symlinks/copies."""
+    """Back-compat for --data-dir: hold out val_split of each class, using links
+    (or copies where links aren't possible) in a temporary folder."""
     import shutil
 
     rng = random.Random(42)
-    for split in ("train", "val"):
-        shutil.rmtree(os.path.join(out_root, split), ignore_errors=True)
     for path, cls in scan(data_dir):
         split = "val" if rng.random() < val_split else "train"
         d = os.path.join(out_root, split, cls)
         os.makedirs(d, exist_ok=True)
-        shutil.copy(path, d)
+        target = os.path.join(d, os.path.basename(path))
+        try:
+            os.link(path, target)
+        except OSError:
+            shutil.copy(path, target)
     return os.path.join(out_root, "train"), os.path.join(out_root, "val")
 
 
@@ -344,7 +357,13 @@ def main():
 
     os.makedirs(args.out_dir, exist_ok=True)
     if args.data_dir:
-        tr, va = split_single_dir(args.data_dir, os.path.join(args.out_dir, "_split"), args.val_split)
+        import atexit
+        import shutil
+        import tempfile
+
+        split_root = tempfile.mkdtemp(prefix="leafcare-split-")
+        atexit.register(shutil.rmtree, split_root, True)
+        tr, va = split_single_dir(args.data_dir, split_root, args.val_split)
         args.train_dir, args.val_dir = [tr], [va]
     if not args.train_dir or not args.val_dir:
         p.error("give --train-dir and --val-dir (or --data-dir)")
@@ -356,8 +375,10 @@ def main():
     train_ds = MixedDataset(sources, class_to_idx, TRAIN_TF, bg_pool)
     epoch_size = args.epoch_size or len(train_ds)
     sampler = WeightedRandomSampler(train_ds.weights, epoch_size, replacement=True)
-    train_dl = DataLoader(train_ds, args.batch_size, sampler=sampler, num_workers=args.workers,
-                          worker_init_fn=worker_init, persistent_workers=args.workers > 0, drop_last=True)
+    batch_size = min(args.batch_size, epoch_size)  # tiny datasets: one batch per epoch
+    train_dl = DataLoader(train_ds, batch_size, sampler=sampler, num_workers=args.workers,
+                          worker_init_fn=worker_init if args.workers > 0 else None,
+                          persistent_workers=args.workers > 0, drop_last=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     print(f"{len(classes)} classes; {len(train_ds)} training images, {epoch_size} sampled per epoch; device {device}")
@@ -367,7 +388,7 @@ def main():
     model = build_model(args.arch, len(classes), args.weights).to(device)
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.05)
-    steps = args.epochs * (epoch_size // args.batch_size)
+    steps = max(1, args.epochs * (epoch_size // batch_size))
     warmup = max(1, steps // 20)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer, lambda s: min(1.0, (s + 1) / warmup) * 0.5 * (1 + math.cos(math.pi * min(1.0, s / steps))))

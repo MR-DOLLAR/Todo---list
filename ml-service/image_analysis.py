@@ -54,14 +54,15 @@ def analyze_leaf(image: Image.Image) -> LeafAnalysis:
     white &= _dilate(plant, 3)
     dark &= _dilate(plant, 3)
 
-    # In field photos soil, mulch and dead material are brown too, so only count
-    # discoloured pixels near healthy green tissue (lesions sit on leaves). When
-    # almost no green is left (a mostly dead leaf) there is nothing to anchor to,
-    # so everything counts.
-    if green.sum() >= 0.1 * max(1, plant.sum()):
-        near_green = _dilate(green, 24)
-        yellow, orange, brown = yellow & near_green, orange & near_green, brown & near_green
-        dark, white = dark & near_green, white & near_green
+    # In field photos soil, mulch and dead material are brown too. Lesions grow out
+    # of leaf tissue, so only count discoloured pixels connected to green tissue;
+    # separate brown regions (soil, a table seen between leaves) don't count. With
+    # essentially no green left (a dead leaf) there is nothing to anchor to, so
+    # everything counts.
+    if green.sum() >= 0.005 * green.size:
+        keep = _reconstruct(green, plant | dark | white)
+        yellow, orange, brown = yellow & keep, orange & keep, brown & keep
+        dark, white = dark & keep, white & keep
         plant = green | yellow | orange | brown
 
     leaf = plant | dark | white
@@ -93,6 +94,17 @@ def _dilate(mask, radius):
     return box > 0
 
 
+def _reconstruct(seed, mask, step=2, max_iter=200):
+    """Pixels of `mask` connected to `seed` (morphological reconstruction)."""
+    cur = seed & mask
+    for _ in range(max_iter):
+        nxt = _dilate(cur, step) & mask
+        if (nxt == cur).all():
+            break
+        cur = nxt
+    return cur | seed
+
+
 def _sharpness(rgb):
     """Variance of the Laplacian of the grey image: a standard focus measure."""
     g = rgb.mean(axis=-1)
@@ -113,9 +125,14 @@ def photo_warnings(image: Image.Image, analysis: LeafAnalysis):
 
 
 def severity_from_analysis(analysis: LeafAnalysis, healthy: bool):
-    """Map affected-area share to a severity level and 0-100 score."""
+    """Map affected-area share to a severity level and 0-100 score.
+
+    `measurable` is False when a disease was predicted but no discoloured tissue
+    was found (e.g. viral mottling, or the photo doesn't show the symptoms).
+    """
     affected = 0.0 if healthy else analysis.lesion_fraction
     pct = round(min(affected, 1.0) * 100, 1)
+    measurable = healthy or pct >= 1
     if healthy or pct < 3:
         level = "none" if healthy else "mild"
     elif pct < 15:
@@ -124,4 +141,4 @@ def severity_from_analysis(analysis: LeafAnalysis, healthy: bool):
         level = "moderate"
     else:
         level = "severe"
-    return {"level": level, "affected_area_pct": pct}
+    return {"level": level, "affected_area_pct": pct, "measurable": measurable}

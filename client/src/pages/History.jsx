@@ -38,6 +38,7 @@ export default function History() {
           <Stat label="Healthy" value={stats.healthy} color="var(--good)" />
           <Stat label="Diseased" value={stats.diseased} color="var(--bad)" />
           <Stat label="Severe cases" value={stats.bySeverity.severe} color="var(--orange)" />
+          {stats.uncertain > 0 && <Stat label="Not sure" value={stats.uncertain} color="var(--warn)" />}
           {stats.topDiseases.length > 0 && (
             <div className="card stat wide">
               <div className="muted small">Most common</div>
@@ -74,12 +75,19 @@ export default function History() {
                   </strong>
                 </Link>
                 <div className="muted small">
-                  {r.prediction.crop} · {pct(r.prediction.confidence)} · {new Date(r.createdAt).toLocaleDateString()}
+                  {r.status === 'no_leaf'
+                    ? new Date(r.createdAt).toLocaleDateString()
+                    : `${r.prediction.crop} · ${pct(r.prediction.confidence)} · ${new Date(r.createdAt).toLocaleDateString()}`}
                 </div>
                 <div className="row wrap">
+                  {r.status === 'no_leaf' && <Badge color="var(--muted)">no leaf</Badge>}
                   {r.status === 'uncertain' && <Badge color="var(--warn)">not sure</Badge>}
-                  <Badge color={SEVERITY_COLOR[r.severity.level]}>{r.severity.level}</Badge>
-                  <Badge color={URGENCY_COLOR[r.urgency]}>{r.urgency}</Badge>
+                  {(r.status || 'confident') === 'confident' && (
+                    <>
+                      <Badge color={SEVERITY_COLOR[r.severity.level]}>{r.severity.level}</Badge>
+                      <Badge color={URGENCY_COLOR[r.urgency]}>{r.urgency}</Badge>
+                    </>
+                  )}
                 </div>
               </div>
               <button className="btn btn-ghost small" onClick={() => remove(r.id)} aria-label="Delete">

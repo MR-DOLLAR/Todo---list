@@ -18,6 +18,9 @@ from image_analysis import analyze_leaf
 MODEL_DIR = os.environ.get("MODEL_DIR", os.path.join(os.path.dirname(__file__), "models"))
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+# When the user picks a crop, the model must itself put at least this much
+# probability on that crop's classes for the answer to count as confident.
+CROP_SUPPORT_MIN = 0.2
 
 
 def _softmax(x):
@@ -27,7 +30,9 @@ def _softmax(x):
 
 def _top_k(labels, probs, k):
     order = np.argsort(probs)[::-1][:k]
-    return [{"label": labels[i], "confidence": float(probs[i])} for i in order]
+    top = [{"label": labels[i], "confidence": float(probs[i])} for i in order]
+    # Drop near-zero alternatives (e.g. other crops' classes after a crop filter).
+    return top[:1] + [t for t in top[1:] if t["confidence"] >= 0.005]
 
 
 class OnnxPredictor:
@@ -68,19 +73,28 @@ class OnnxPredictor:
             logits = np.concatenate([self.session.run(None, {self.input_name: np.ascontiguousarray(v[None])})[0]
                                      for v in views])
         probs = np.mean([_softmax(l.astype(np.float64)) for l in logits], axis=0)
+        support = 1.0
         if crop:
             # Restrict to the user-selected crop when it is known to the model.
             mask = np.array([_crop_key(l) == crop.lower() for l in self.labels])
             if mask.any():
+                support = float(probs[mask].sum())
                 probs = np.where(mask, probs, 0.0)
-                probs = probs / probs.sum()
-        return _top_k(self.labels, probs, top_k), analyze_leaf(image)
+                # Re-normalise only when the crop has several classes; for a
+                # single-class crop that would make every photo 100 % certain.
+                if mask.sum() > 1:
+                    probs = probs / max(support, 1e-12)
+        top = _top_k(self.labels, probs, top_k)
+        top[0]["crop_support"] = support
+        return top, analyze_leaf(image)
 
 
 class HeuristicPredictor:
     mode = "heuristic"
     fallback_reason = None
-    threshold = 0.0  # demo mode already shows its own banner
+    # The colour heuristic is rough, so most of its answers count as "not sure"
+    # (which also keeps its treatment plans non-chemical).
+    threshold = 0.6
     labels = [
         "Generic___healthy",
         "Generic___Leaf_spot_or_blight",

@@ -6,9 +6,9 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from image_analysis import photo_warnings, severity_from_analysis
+from image_analysis import BLUR_THRESHOLD, photo_warnings, severity_from_analysis
 from knowledge import KnowledgeBase
-from predictor import load_predictor
+from predictor import CROP_SUPPORT_MIN, load_predictor
 from treatment import build_plan
 
 MAX_UPLOAD_MB = 10
@@ -64,10 +64,19 @@ def create_app(predictor=None, kb=None):
             return jsonify(error=f"No knowledge-base entry for label {best['label']}"), 500
 
         threshold = getattr(app.predictor, "threshold", 0.0)
-        uncertain = best["confidence"] < threshold
-        # Very little plant-coloured tissue and an unsure model: probably not a leaf.
-        if uncertain and analysis.leaf_fraction < 0.05:
+        poor_photo = min(image.size) < 160 or analysis.sharpness < BLUR_THRESHOLD
+        uncertain = (
+            best["confidence"] < threshold
+            # The chosen crop barely registers with the model: probably a different plant.
+            or best.get("crop_support", 1.0) < CROP_SUPPORT_MIN
+            # Too small or blurry to trust, whatever the score.
+            or poor_photo
+        )
+        # Every real leaf photo we tested has >= 8 % plant-coloured pixels; screenshots,
+        # sky, walls and the like have almost none, whatever the model thinks.
+        if analysis.leaf_fraction < 0.05:
             status = "no_leaf"
+            uncertain = True
         else:
             status = "uncertain" if uncertain else "confident"
 

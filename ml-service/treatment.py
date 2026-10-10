@@ -1,6 +1,8 @@
 """Turns a diagnosis (disease + severity) into a concrete, prioritised treatment plan
 and a recovery prognosis."""
 
+import re
+
 INCURABLE_TYPES = {"viral"}
 INCURABLE_IDS = {"Orange___Haunglongbing_(Citrus_greening)", "Grape___Esca_(Black_Measles)"}
 
@@ -8,6 +10,26 @@ SEVERITY_MULTIPLIER = {"none": 0.0, "mild": 0.8, "moderate": 1.2, "severe": 1.8}
 BASE_RECOVERY_CHANCE = {"mild": 0.92, "moderate": 0.75, "severe": 0.5}
 SPREAD_WEIGHT = {"none": 0, "low": 0, "medium": 1, "high": 2}
 URGENCY = ["low", "medium", "high", "critical"]
+
+# Actions that are only appropriate once the diagnosis is confirmed: any product
+# (spray, fungicide, oil, ...) or removing whole plants/trees.
+_PRODUCT = re.compile(
+    r"copper|sulfur|sulphur|bordeaux|fungicid|bactericid|insecticid|miticid|bicarbonate|\boil\b|neem|spray|"
+    r"chlorothalonil|mancozeb|captan|imidacloprid|thiamethoxam|cyantraniliprole|abamectin|systemic|\bmilk\b|"
+    r"bacillus|trichoderma|acibenzolar|oxytetracycline|myclobutanil|azoxystrobin|propiconazole|soap|urea|"
+    r"predatory|release|kaolin|sealant|paste|epsom|chelated|fertili",
+    re.IGNORECASE)
+_DRASTIC = re.compile(r"\b(plants?|trees?|vines?|junipers?|cull)\b|whole plant", re.IGNORECASE)
+
+
+def _safe(actions):
+    """Steps that are fine to take before a diagnosis is confirmed."""
+    def drastic(a):
+        low = a.lower()
+        return (any(w in low for w in ("destroy", "kill", "burn", "trunk renewal"))
+                or ("remov" in low and _DRASTIC.search(a)))
+
+    return [a for a in actions if not _PRODUCT.search(a) and not drastic(a)]
 
 
 def is_curable(disease):
@@ -44,22 +66,24 @@ def build_plan(disease, severity, confidence, preference="integrated", uncertain
         urgency_idx = max(urgency_idx, 2)
     urgency = URGENCY[min(urgency_idx, 3)]
 
-    if not curable and uncertain:
-        # Never tell someone to destroy plants on an unconfirmed diagnosis.
+    if uncertain:
+        # Unconfirmed: no products, no removing plants, no alarming urgency or
+        # prognosis until the diagnosis is confirmed.
         approach = "confirm first"
+        urgency = URGENCY[min(urgency_idx, 1)]
         steps = [
             {"phase": "Today", "actions": [
+                "Confirm the diagnosis: retake a clear close-up of one leaf in daylight and select the crop, "
+                "or show the plant to a local agricultural extension service or plant clinic",
+                "Remove only clearly spotted leaves and put them in the bin (not the compost)",
                 "Keep the plant apart from healthy plants and wash your hands and tools after handling it",
-                "Confirm the diagnosis before removing plants: retake a clear close-up photo, or ask a "
-                "local agricultural extension service or plant clinic",
             ]},
-            {"phase": "Days 1-14", "actions": _dedupe(
-                [a for a in t["organic"] if "remove" not in a.lower() and "destroy" not in a.lower()]
-                + t["cultural"])},
-            {"phase": "Ongoing", "actions": disease["prevention"]},
+            {"phase": "Until confirmed", "actions": _dedupe(_safe(t["cultural"] + t["organic"]))},
+            {"phase": "Ongoing", "actions": _safe(disease["prevention"])},
         ]
-        summary = (f"Possibly {disease['name']} — not confirmed. This disease can't be cured, so confirm "
-                   "the diagnosis before removing any plants.")
+        curability = "" if curable else " This disease can't be cured, so confirm it before removing any plants."
+        summary = (f"Possibly {disease['name']} — not confirmed. Until the diagnosis is confirmed, take only the "
+                   f"safe steps below: no sprays and no removing plants.{curability}")
         prognosis = {"recovery_chance": None, "estimated_recovery_days": None}
     elif not curable:
         approach = "containment"
@@ -75,8 +99,7 @@ def build_plan(disease, severity, confidence, preference="integrated", uncertain
                    "Focus on removing infected plants and stopping the spread to healthy ones.")
         prognosis = {"recovery_chance": 0.0, "estimated_recovery_days": None}
     else:
-        # Unconfirmed diagnoses get non-chemical treatment only.
-        approach = "organic" if uncertain else _choose_approach(level, preference)
+        approach = _choose_approach(level, preference)
         primary = _primary_treatments(t, approach)
         steps = [
             {"phase": "Today", "actions": _dedupe(_immediate_actions(level) + primary[:1])},
@@ -95,9 +118,6 @@ def build_plan(disease, severity, confidence, preference="integrated", uncertain
             "estimated_recovery_days": round(base_days * SEVERITY_MULTIPLIER.get(level, 1.0)),
         }
         summary = _summary(disease, level, approach)
-        if uncertain:
-            summary = (f"Possibly {disease['name']} — not confirmed. Until the diagnosis is confirmed, "
-                       "use only the non-chemical steps below.")
 
     return {
         "urgency": urgency,

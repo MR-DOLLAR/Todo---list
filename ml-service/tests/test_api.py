@@ -184,8 +184,10 @@ def test_low_confidence_is_reported_as_uncertain_with_non_chemical_plan():
     assert body["status"] == "uncertain"
     assert "not sure" in body["message"]
     plan = body["treatment_plan"]
-    assert plan["approach"] == "organic"
+    assert plan["approach"] == "confirm first"
     assert plan["summary"].startswith("Possibly Early Blight")
+    assert plan["urgency"] in ("low", "medium")
+    assert plan["prognosis"]["recovery_chance"] is None
     assert any("not sure" in w for w in plan["warnings"])
 
 
@@ -231,3 +233,74 @@ def test_photo_warnings_flag_blurry_and_tiny_images():
     warnings = post(client, buf).get_json()["photo_warnings"]
     assert any("small" in w for w in warnings)
     assert any("blurry" in w for w in warnings)
+
+
+def test_uncertain_plans_never_suggest_products_or_removing_plants():
+    import re
+    from treatment import build_plan
+
+    unsafe = re.compile(r"copper|sulfur|fungicid|insecticid|spray|\boil\b|neem|destroy|kill|burn|whole plant|"
+                        r"remov\w*.*\b(plants?|trees?)\b", re.IGNORECASE)
+    kb = KnowledgeBase()
+    for disease in kb.all():
+        if disease["healthy"]:
+            continue
+        for level in ("mild", "moderate", "severe"):
+            for pref in ("organic", "chemical", "integrated"):
+                plan = build_plan(disease, {"level": level, "affected_area_pct": 50}, 0.3, pref, uncertain=True)
+                for step in plan["steps"]:
+                    for action in step["actions"]:
+                        if action.startswith(("Confirm the diagnosis", "Remove only clearly spotted leaves")):
+                            continue
+                        assert not unsafe.search(action), (disease["id"], action)
+
+
+def test_choosing_a_single_class_crop_does_not_force_full_confidence():
+    import predictor
+
+    p = predictor.load_predictor()
+    if p.mode != "model":
+        pytest.skip("no trained model")
+    sky = Image.new("RGB", (256, 256), (40, 90, 200))
+    top, _ = p.predict(sky, crop="Orange")
+    assert top[0]["confidence"] < 0.9          # not re-normalised to 100 %
+    assert top[0]["crop_support"] < predictor.CROP_SUPPORT_MIN
+    assert all(t["confidence"] >= 0.005 for t in top[1:])
+
+
+def test_screenshot_like_image_without_plant_colours_is_no_leaf_even_if_model_is_sure():
+    client, _ = stub_client(confidence=0.95)
+    img = Image.new("RGB", (400, 300), (250, 250, 250))
+    from PIL import ImageDraw
+    d = ImageDraw.Draw(img)
+    for y in range(20, 280, 18):
+        d.line((20, y, 380, y), fill=(30, 30, 30), width=3)  # lines of "text"
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    body = post(client, buf).get_json()
+    assert body["status"] == "no_leaf"
+    assert body["treatment_plan"]["approach"] == "confirm first"
+
+
+@pytest.mark.parametrize("share,level", [(0.3, "moderate"), (0.5, "severe"), (0.7, "severe")])
+def test_large_necrotic_areas_are_not_underestimated(share, level):
+    from image_analysis import analyze_leaf, severity_from_analysis
+
+    img = Image.new("RGB", (256, 256), (120, 120, 120))
+    d = ImageDraw.Draw(img)
+    d.rectangle((16, 16, 240, 240), fill=(50, 140, 45))                       # leaf filling the frame
+    d.rectangle((16, 16, 16 + int(224 * share), 240), fill=(110, 60, 25))      # brown dead tissue
+    sev = severity_from_analysis(analyze_leaf(img), healthy=False)
+    assert sev["level"] == level
+    assert abs(sev["affected_area_pct"] - share * 100) < 8
+
+
+def test_brown_soil_away_from_the_leaf_is_not_counted_as_disease():
+    from image_analysis import analyze_leaf
+
+    img = Image.new("RGB", (256, 256), (105, 75, 45))                          # soil everywhere
+    d = ImageDraw.Draw(img)
+    d.rectangle((100, 100, 156, 156), fill=(120, 120, 120))                    # gap between leaf and soil
+    d.ellipse((110, 110, 146, 146), fill=(50, 140, 45))                        # small healthy leaf
+    assert analyze_leaf(img).lesion_fraction < 0.1

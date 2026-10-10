@@ -3,8 +3,9 @@
 PlantDoc folder names are mapped to PlantVillage class names so both datasets
 share one label set. Images are EXIF-rotated, converted to RGB and resized
 (shorter side 320 px) so training reads small files. Training images that are
-exact or near duplicates of a PlantDoc test image are dropped to keep the test
-score honest.
+exact or near duplicates of a PlantDoc test image are dropped, and validation
+images that are near duplicates of a training image are dropped, so the test
+score and the confidence calibration stay honest.
 
 Usage:
     python train/prepare_data.py --plantdoc /path/to/PlantDoc-Dataset \\
@@ -16,6 +17,7 @@ import argparse
 import hashlib
 import os
 import random
+import shutil
 
 from PIL import Image, ImageOps
 
@@ -99,6 +101,9 @@ def main():
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
     rng = random.Random(args.seed)
+    # Start clean: leftovers from a run with another seed would leak val into train.
+    for split in ("train_pv", "train_pd", "val_pd", "test_pd"):
+        shutil.rmtree(os.path.join(args.out, split), ignore_errors=True)
 
     # Test set first, so training near-duplicates of test images can be dropped.
     test_hashes, test_md5 = [], set()
@@ -115,17 +120,20 @@ def main():
             save(resized(im), os.path.join(args.out, "test_pd"), label, folder + f)
             n_test += 1
 
-    def near_test(h):
-        return any(bin(h ^ t).count("1") <= 4 for t in test_hashes)
+    def near(h, hashes):
+        return any(bin(h ^ t).count("1") <= 4 for t in hashes)
 
-    dropped = n_train = n_val = 0
+    dropped = dropped_val = n_train = n_val = 0
+    train_hashes = []
+    pending_val = []  # (image, label, name, hash): saved once all train hashes are known
     for folder, label in PLANTDOC_TO_PLANTVILLAGE.items():
         src = os.path.join(args.plantdoc, "train", folder)
         if not os.path.isdir(src):
             continue
         items = files(src)
         rng.shuffle(items)
-        n_val_here = max(1, round(len(items) * args.val_fraction))
+        # Keep at least one training image per class.
+        n_val_here = min(len(items) - 1, max(1, round(len(items) * args.val_fraction)))
         for i, f in enumerate(items):
             path = os.path.join(src, f)
             if hashlib.md5(open(path, "rb").read()).hexdigest() in test_md5:
@@ -135,13 +143,22 @@ def main():
                 im = load_rgb(path)
             except OSError:
                 continue
-            if near_test(dhash(im)):
+            h = dhash(im)
+            if near(h, test_hashes):
                 dropped += 1
                 continue
-            split = "val_pd" if i < n_val_here else "train_pd"
-            save(resized(im), os.path.join(args.out, split), label, folder + f)
-            n_val += split == "val_pd"
-            n_train += split == "train_pd"
+            if i < n_val_here:
+                pending_val.append((resized(im), label, folder + f, h))
+            else:
+                save(resized(im), os.path.join(args.out, "train_pd"), label, folder + f)
+                train_hashes.append(h)
+                n_train += 1
+    for im, label, name, h in pending_val:
+        if near(h, train_hashes):
+            dropped_val += 1
+            continue
+        save(im, os.path.join(args.out, "val_pd"), label, name)
+        n_val += 1
 
     n_pv = 0
     if args.plantvillage:
@@ -155,7 +172,8 @@ def main():
                 save(resized(load_rgb(os.path.join(src, f))), os.path.join(args.out, "train_pv"), label, f)
                 n_pv += 1
 
-    print(f"PlantDoc: {n_train} train, {n_val} val, {n_test} test ({dropped} train duplicates of test dropped)")
+    print(f"PlantDoc: {n_train} train, {n_val} val, {n_test} test "
+          f"({dropped} duplicates of test images and {dropped_val} val duplicates of train images dropped)")
     print(f"PlantVillage: {n_pv} train")
 
 

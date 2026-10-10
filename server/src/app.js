@@ -121,17 +121,23 @@ export function createApp({ mlUrl, dataDir, clientDist, logger = true }) {
 
   api.get('/stats', async (_req, res) => {
     const records = await store.list();
+    const statusOf = (r) => r.result.status || 'confident';
+    // Only confident diagnoses count as findings; unsure and no-leaf photos are
+    // reported separately.
+    const confident = records.filter((r) => statusOf(r) === 'confident');
     const byDisease = {};
     const bySeverity = { none: 0, mild: 0, moderate: 0, severe: 0 };
-    for (const { result } of records) {
+    for (const { result } of confident) {
       const key = `${result.prediction.crop} – ${result.prediction.disease}`;
       byDisease[key] = (byDisease[key] || 0) + 1;
       bySeverity[result.severity.level] = (bySeverity[result.severity.level] || 0) + 1;
     }
     res.json({
       total: records.length,
-      healthy: records.filter((r) => r.result.prediction.healthy).length,
-      diseased: records.filter((r) => !r.result.prediction.healthy).length,
+      healthy: confident.filter((r) => r.result.prediction.healthy).length,
+      diseased: confident.filter((r) => !r.result.prediction.healthy).length,
+      uncertain: records.filter((r) => statusOf(r) === 'uncertain').length,
+      noLeaf: records.filter((r) => statusOf(r) === 'no_leaf').length,
       bySeverity,
       topDiseases: Object.entries(byDisease)
         .sort((a, b) => b[1] - a[1])
