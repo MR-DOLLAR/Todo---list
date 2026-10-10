@@ -192,7 +192,10 @@ export default function Result() {
             <List items={disease.causes} />
           </div>
           <div className="card">
-            <h3>All treatment options</h3>
+            <h3>{uncertain ? 'Treatment options once confirmed' : 'All treatment options'}</h3>
+            {uncertain && (
+              <p className="small muted">Reference only — use these after the diagnosis has been confirmed.</p>
+            )}
             <div className="tabs">
               {TABS.map((t) => (
                 <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>

@@ -13,9 +13,13 @@ and predicts a treatment plan with a recovery prognosis.
 
 ## Features
 
-- **Disease detection** – CNN (MobileNetV3 / EfficientNet / ResNet50 transfer learning) trained on the
-  [PlantVillage](https://www.kaggle.com/datasets/abdallahalidev/plantvillage-dataset) dataset: 38 classes across 14 crops
-  (apple, corn, grape, potato, tomato, …). An optional crop hint narrows predictions to that crop.
+- **Disease detection** – an EfficientNet-B2 CNN trained on real-world field photos
+  ([PlantDoc](https://github.com/pratikkayal/PlantDoc-Dataset)) plus lab photos
+  ([PlantVillage](https://github.com/spMohanty/PlantVillage-Dataset)): 38 classes across 14 crops
+  (apple, corn, grape, potato, tomato, …). Selecting the crop narrows predictions to that crop.
+- **Honest answers** – when the model isn't confident, the photo shows no leaf, or the photo is too small/blurry,
+  the app says so ("Not sure" / "No leaf found") and lists the likely matches instead of guessing; unconfirmed
+  diagnoses only get safe, non-chemical steps.
 - **Severity estimation** – HSV colour segmentation measures the share of leaf tissue that is necrotic, yellowing,
   rusty or covered in powdery growth → `none / mild / moderate / severe`.
 - **Treatment / cure prediction** – combines disease, severity, spread risk and the user's preference
@@ -25,8 +29,9 @@ and predicts a treatment plan with a recovery prognosis.
 - **Knowledge base** – symptoms, causes, pathogen, organic/chemical/cultural treatments and prevention for every class.
 - **History & stats** – every diagnosis is stored with its image; dashboard of healthy vs diseased, severity, most common diseases.
 - **Disease library** – searchable by crop, name, symptom or pathogen.
-- **Pre-trained model included** – `ml-service/models/leaf_model.onnx` (MobileNetV3, 17 MB) scores
-  **97.6 % top-1 / 99.7 % top-3** on 1,132 held-out PlantVillage images (see [Model](#model)).
+- **Pre-trained model included** – `ml-service/models/leaf_model.onnx` (32 MB). On real field photos it never
+  saw: **67 % right first guess, 90 % within its top 3, 79 % with the crop selected**; on lab photos 97 %
+  (see [Model and accuracy](#model-and-accuracy)).
 - **Fallback mode** – if the model file is removed, the ML service falls back to a colour-heuristic classifier
   that recognises generic symptom groups (leaf spot/blight, powdery mildew, rust, chlorosis, healthy) and the UI
   shows a "demo mode" banner.
@@ -162,55 +167,84 @@ Open **http://localhost:5173**. Keep all three terminals running.
 | Red *“This is a development server”* line from Flask | Expected for local use; Docker runs the ML service under gunicorn. |
 | Opening the app from your phone doesn't work | By default it only listens on this computer. Use Docker, or start with `LEAFCARE_HOST=0.0.0.0 npm start` (PowerShell: `$env:LEAFCARE_HOST='0.0.0.0'; npm start` · Command Prompt: `set LEAFCARE_HOST=0.0.0.0&& npm start`), then open `http://<your-computer's-IP>:4000` on the phone. |
 
-## Model
+## Model and accuracy
 
-The bundled model is timm's `mobilenetv3_large_100` (ImageNet-pretrained) fine-tuned for 4 epochs on CPU
-(~12 min) on a 200-images-per-class subset of PlantVillage `color`:
+The bundled model is timm's `efficientnet_b2` (ImageNet-pretrained), fine-tuned on CPU for 8 epochs on
+**1,972 real-world photos** from PlantDoc (sampled twice as often) plus **6,420 PlantVillage lab photos**, whose
+plain backgrounds were randomly replaced with soil/foliage/blurred-photo backgrounds so the model doesn't learn
+"plain grey background = leaf". The best epoch was chosen on held-out *real* photos.
 
-| Split | Images | Result |
-| --- | --- | --- |
-| Train / validation | 5,457 / 963 | 98.0 % val accuracy |
-| Held-out test (never seen in training) | 1,132 | **97.6 % top-1, 99.7 % top-3** |
-| End-to-end through the Node API | 114 | 97.4 %, ~22 ms per request on CPU |
+Accuracy on photos the model never saw, measured through the service's own inference code:
 
-The remaining errors are mostly between look-alike diseases (corn gray leaf spot ↔ northern leaf blight).
-PlantVillage photos are single leaves on plain backgrounds; real field photos are harder, so expect lower accuracy
-in the wild and consider fine-tuning on your own photos.
+| Test set | Photos | Right first guess | Right within top 3 | With crop selected |
+| --- | --- | --- | --- | --- |
+| **Real-world field photos** (PlantDoc test) | 236 | **66.5 %** | **89.8 %** | **78.8 %** |
+| Lab photos, plain background (PlantVillage) | 1,132 | 97.3 % | 99.6 % | 97.8 % |
+
+For comparison, the previous model (trained on lab photos only) got **25 %** right on the same real-world photos.
+
+**"Not sure" answers.** A result counts as confident only when the model's confidence is at least the calibrated
+threshold (0.7, chosen so ≥ 88 % of confident answers were right on held-out validation photos). On the real-world
+test photos:
+
+| | Confident answers | …of which right | Shown as "Not sure" |
+| --- | --- | --- | --- |
+| Crop not selected | 45 % | 85 % | 55 % |
+| Crop selected | 63 % | 89 % | 37 % |
+
+"Not sure" results still list the most likely matches (the right one is in the top 3 ~90 % of the time), but the
+treatment plan sticks to safe, non-chemical steps until the diagnosis is confirmed. Photos with almost no
+plant-coloured area are reported as "No leaf found"; very small or blurry photos are always "Not sure".
+
+**Getting the best results:** photograph **one leaf, close up**, in daylight, sharp, with the symptoms visible,
+and **select the crop**. Only the 14 crops listed in the app are supported — other plants can't be diagnosed.
+The remaining mistakes are mostly between look-alike diseases (corn gray leaf spot ↔ northern leaf blight,
+tomato bacterial spot ↔ septoria leaf spot). The affected-area percentage is a colour-based estimate and can be
+thrown off by brown backgrounds touching the leaf. For an important decision, confirm with a local agricultural
+extension service.
 
 ### Training your own
 
-1. Download PlantVillage and point at the `color` folder (one sub-folder per class).
-2. Train and export:
+Requires `pip install -r train/requirements.txt` (PyTorch; wheels exist for Python 3.10–3.14, Intel Macs up to
+3.12). A GPU is much faster; the bundled model took about 1.5 hours on a 4-core CPU.
 
-```bash
-cd ml-service
-.venv/bin/python -m pip install -r train/requirements.txt
-.venv/bin/python train/train.py --data-dir /path/to/plantvillage/color --epochs 5 --arch mobilenet_v3
-```
+1. Download the datasets: [PlantDoc](https://github.com/pratikkayal/PlantDoc-Dataset) (real-world photos) and the
+   PlantVillage `color` folder ([GitHub](https://github.com/spMohanty/PlantVillage-Dataset), `raw/color`).
+2. Prepare them (maps PlantDoc names to the shared label set, fixes rotation, resizes, removes duplicates between
+   splits):
+
+   ```bash
+   cd ml-service
+   .venv/bin/python train/prepare_data.py --plantdoc /path/to/PlantDoc-Dataset --plantvillage /path/to/plantvillage/color --out data
+   ```
+
+3. Train (each `--train-dir` is `PATH[:WEIGHT][:bg]`; `bg` replaces lab backgrounds), then calibrate the
+   "Not sure" threshold and evaluate on the untouched test photos:
+
+   ```bash
+   .venv/bin/python train/train.py --train-dir data/train_pd:2 --train-dir data/train_pv:1:bg --val-dir data/val_pd --test-dir data/test_pd --arch timm:efficientnet_b2 --epochs 8
+   .venv/bin/python train/calibrate.py --val-dir data/val_pd
+   .venv/bin/python train/evaluate.py --data-dir data/test_pd
+   ```
 
 On Windows use `.venv\Scripts\python.exe` in place of `.venv/bin/python`.
 
-PyTorch wheels exist for Python 3.10–3.14 (Intel Macs: up to 3.12). Training on a CPU works but is slow on the
-full dataset; a GPU is recommended.
-
-Behind a firewall that blocks `download.pytorch.org` / Hugging Face, pass local pretrained weights instead, e.g.
-the timm MobileNetV3 weights from GitHub releases:
-
-```bash
-curl -LO https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_large_100_ra-f55367f5.pth
-.venv/bin/python train/train.py --data-dir /path/to/train --arch timm:mobilenetv3_large_100 --weights mobilenetv3_large_100_ra-f55367f5.pth --epochs 4
-```
-
-(Windows PowerShell: use `curl.exe` instead of `curl`.)
-
 This writes `models/leaf_model.onnx` and `models/labels.json`; restart the ML service to pick them up
-(`GET /health` reports `"mode": "model"`). Evaluate on a held-out folder with the same inference code the service uses:
+(`GET /health` reports `"mode": "model"`). The older single-folder form `train.py --data-dir FOLDER` still works
+(20 % is held out for validation).
+
+Behind a firewall that blocks `download.pytorch.org` / Hugging Face, pass local ImageNet weights with `--weights`,
+e.g. timm's EfficientNet-B2 weights from GitHub releases (Windows PowerShell: `curl.exe` instead of `curl`):
 
 ```bash
-.venv/bin/python train/evaluate.py --data-dir /path/to/test
+curl -LO https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b2_ra-bcdf34b7.pth
+.venv/bin/python train/train.py --weights efficientnet_b2_ra-bcdf34b7.pth --train-dir data/train_pd:2 --train-dir data/train_pv:1:bg --val-dir data/val_pd --arch timm:efficientnet_b2
 ```
 
 Inference needs only `onnxruntime`, `numpy` and `Pillow`; PyTorch is only required for training.
+
+**Dataset credits:** PlantDoc (Singh et al., 2020) is licensed CC BY 4.0. PlantVillage images are from Hughes &
+Salathé, 2015 (spMohanty/PlantVillage-Dataset).
 
 ## API
 
@@ -233,12 +267,18 @@ Inference needs only `onnxruntime`, `numpy` and `Pillow`; PyTorch is only requir
 
 Example `/predict` response (abridged):
 
+`status` is `confident`, `uncertain` (shown as "Not sure") or `no_leaf`.
+
 ```json
 {
   "mode": "model",
-  "prediction": { "label": "Tomato___Early_blight", "crop": "Tomato", "disease": "Early Blight", "confidence": 0.97, "healthy": false },
+  "status": "confident",
+  "message": null,
+  "photo_warnings": [],
+  "supported_crops": ["Apple", "Bell Pepper", "Blueberry", "..."],
+  "prediction": { "label": "Tomato___Early_blight", "crop": "Tomato", "disease": "Early Blight", "confidence": 0.97, "threshold": 0.7, "healthy": false },
   "alternatives": [{ "label": "Tomato___Target_Spot", "name": "Target Spot", "confidence": 0.02 }],
-  "severity": { "level": "moderate", "affected_area_pct": 21.4 },
+  "severity": { "level": "moderate", "affected_area_pct": 21.4, "measurable": true },
   "treatment_plan": {
     "urgency": "medium", "curable": true, "approach": "integrated",
     "summary": "Early Blight on tomato detected. ...",

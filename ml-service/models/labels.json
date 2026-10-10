@@ -40,10 +40,286 @@
     "Tomato___healthy"
   ],
   "image_size": 224,
-  "arch": "timm:mobilenetv3_large_100",
-  "val_accuracy": 0.9803,
-  "trained_on": "PlantVillage color subset (170 img/class, 15% used for validation)",
-  "test_accuracy_top1": 0.9761,
-  "test_accuracy_top3": 0.9973,
-  "test_images": 1132
+  "arch": "timm:efficientnet_b2",
+  "confidence_threshold": 0.7,
+  "calibration": [
+    {
+      "threshold": 0.05,
+      "coverage": 1.0,
+      "precision": 0.719,
+      "coverage_with_crop": 0.899,
+      "precision_with_crop": 0.827
+    },
+    {
+      "threshold": 0.1,
+      "coverage": 1.0,
+      "precision": 0.719,
+      "coverage_with_crop": 0.899,
+      "precision_with_crop": 0.827
+    },
+    {
+      "threshold": 0.15,
+      "coverage": 0.991,
+      "precision": 0.723,
+      "coverage_with_crop": 0.899,
+      "precision_with_crop": 0.827
+    },
+    {
+      "threshold": 0.2,
+      "coverage": 0.973,
+      "precision": 0.736,
+      "coverage_with_crop": 0.899,
+      "precision_with_crop": 0.827
+    },
+    {
+      "threshold": 0.25,
+      "coverage": 0.922,
+      "precision": 0.767,
+      "coverage_with_crop": 0.884,
+      "precision_with_crop": 0.831
+    },
+    {
+      "threshold": 0.3,
+      "coverage": 0.893,
+      "precision": 0.786,
+      "coverage_with_crop": 0.881,
+      "precision_with_crop": 0.831
+    },
+    {
+      "threshold": 0.35,
+      "coverage": 0.824,
+      "precision": 0.812,
+      "coverage_with_crop": 0.872,
+      "precision_with_crop": 0.829
+    },
+    {
+      "threshold": 0.4,
+      "coverage": 0.785,
+      "precision": 0.81,
+      "coverage_with_crop": 0.857,
+      "precision_with_crop": 0.836
+    },
+    {
+      "threshold": 0.45,
+      "coverage": 0.731,
+      "precision": 0.845,
+      "coverage_with_crop": 0.839,
+      "precision_with_crop": 0.847
+    },
+    {
+      "threshold": 0.5,
+      "coverage": 0.681,
+      "precision": 0.851,
+      "coverage_with_crop": 0.812,
+      "precision_with_crop": 0.853
+    },
+    {
+      "threshold": 0.55,
+      "coverage": 0.633,
+      "precision": 0.854,
+      "coverage_with_crop": 0.776,
+      "precision_with_crop": 0.869
+    },
+    {
+      "threshold": 0.6,
+      "coverage": 0.588,
+      "precision": 0.853,
+      "coverage_with_crop": 0.725,
+      "precision_with_crop": 0.877
+    },
+    {
+      "threshold": 0.65,
+      "coverage": 0.546,
+      "precision": 0.874,
+      "coverage_with_crop": 0.699,
+      "precision_with_crop": 0.885
+    },
+    {
+      "threshold": 0.7,
+      "coverage": 0.478,
+      "precision": 0.912,
+      "coverage_with_crop": 0.654,
+      "precision_with_crop": 0.89
+    },
+    {
+      "threshold": 0.75,
+      "coverage": 0.427,
+      "precision": 0.937,
+      "coverage_with_crop": 0.606,
+      "precision_with_crop": 0.897
+    },
+    {
+      "threshold": 0.8,
+      "coverage": 0.364,
+      "precision": 0.959,
+      "coverage_with_crop": 0.546,
+      "precision_with_crop": 0.902
+    },
+    {
+      "threshold": 0.85,
+      "coverage": 0.269,
+      "precision": 0.978,
+      "coverage_with_crop": 0.516,
+      "precision_with_crop": 0.919
+    },
+    {
+      "threshold": 0.9,
+      "coverage": 0.146,
+      "precision": 0.959,
+      "coverage_with_crop": 0.418,
+      "precision_with_crop": 0.95
+    },
+    {
+      "threshold": 0.95,
+      "coverage": 0.048,
+      "precision": 0.938,
+      "coverage_with_crop": 0.325,
+      "precision_with_crop": 0.963
+    }
+  ],
+  "calibration_set": "val_pd_clean",
+  "calibration_target": 0.88,
+  "training": {
+    "datasets": [
+      "PlantDoc train split (1,972 real-world photos, CC BY 4.0) x2 sampling weight",
+      "PlantVillage subset (6,420 lab photos, 170/class) with background replacement"
+    ],
+    "epochs": 8,
+    "pretrained": "timm efficientnet_b2 (ImageNet)",
+    "history": [
+      {
+        "epoch": 1,
+        "train_acc": 0.4928,
+        "val_pd": {
+          "top1": 0.6,
+          "top3": 0.8457,
+          "n": 350
+        },
+        "test": {
+          "top1": 0.8534,
+          "top3": 0.9779,
+          "n": 1132
+        }
+      },
+      {
+        "epoch": 2,
+        "train_acc": 0.7894,
+        "val_pd": {
+          "top1": 0.64,
+          "top3": 0.8571,
+          "n": 350
+        },
+        "test": {
+          "top1": 0.917,
+          "top3": 0.9929,
+          "n": 1132
+        }
+      },
+      {
+        "epoch": 3,
+        "train_acc": 0.8736,
+        "val_pd": {
+          "top1": 0.6486,
+          "top3": 0.8686,
+          "n": 350
+        },
+        "test": {
+          "top1": 0.9435,
+          "top3": 0.9956,
+          "n": 1132
+        }
+      },
+      {
+        "epoch": 4,
+        "train_acc": 0.9008,
+        "val_pd": {
+          "top1": 0.6771,
+          "top3": 0.8886,
+          "n": 350
+        },
+        "test": {
+          "top1": 0.962,
+          "top3": 0.9956,
+          "n": 1132
+        }
+      },
+      {
+        "epoch": 5,
+        "train_acc": 0.9354,
+        "val_pd": {
+          "top1": 0.6971,
+          "top3": 0.8657,
+          "n": 350
+        },
+        "test": {
+          "top1": 0.9682,
+          "top3": 0.9956,
+          "n": 1132
+        }
+      },
+      {
+        "epoch": 6,
+        "train_acc": 0.9489,
+        "val_pd": {
+          "top1": 0.7086,
+          "top3": 0.8829,
+          "n": 350
+        },
+        "test": {
+          "top1": 0.9682,
+          "top3": 0.9956,
+          "n": 1132
+        }
+      },
+      {
+        "epoch": 7,
+        "train_acc": 0.961,
+        "val_pd": {
+          "top1": 0.72,
+          "top3": 0.8886,
+          "n": 350
+        },
+        "test": {
+          "top1": 0.9735,
+          "top3": 0.9956,
+          "n": 1132
+        }
+      },
+      {
+        "epoch": 8,
+        "train_acc": 0.9597,
+        "val_pd": {
+          "top1": 0.72,
+          "top3": 0.9,
+          "n": 350
+        },
+        "test": {
+          "top1": 0.9735,
+          "top3": 0.9965,
+          "n": 1132
+        }
+      }
+    ]
+  },
+  "evaluation": {
+    "note": "Measured with the service inference path (EXIF, mirror TTA, threshold).",
+    "plantdoc_test_real_world": {
+      "images": 236,
+      "top1": 0.665,
+      "top3": 0.898,
+      "crop_correct": 0.839,
+      "top1_with_crop_selected": 0.788,
+      "confident_share": 0.453,
+      "confident_precision": 0.85,
+      "confident_share_with_crop": 0.631,
+      "confident_precision_with_crop": 0.886
+    },
+    "plantvillage_test_lab": {
+      "images": 1132,
+      "top1": 0.973,
+      "top3": 0.996,
+      "confident_share": 0.875,
+      "confident_precision": 0.997
+    }
+  }
 }
